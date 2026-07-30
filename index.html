@@ -55,10 +55,29 @@
   header .sub{ font-size:12.5px; color:var(--ink-soft); margin-top:5px; }
 
   main{ padding:6px 18px 0; }
+  .ramo-wrap{
+    position:relative;
+    border-radius:var(--radius);
+    margin-bottom:12px;
+    overflow:hidden;
+  }
+  .ramo-delete-bg{
+    position:absolute;
+    inset:0;
+    background:var(--danger);
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    padding-right:22px;
+    color:#fff;
+    font-weight:700;
+    font-family:var(--font-display);
+    font-size:13px;
+    cursor:pointer;
+  }
   .ramo-card, .add-card{
     min-height:84px;
     border-radius:var(--radius);
-    margin-bottom:12px;
     display:flex;
     flex-direction:column;
     align-items:center;
@@ -66,13 +85,15 @@
     text-align:center;
     cursor:pointer;
     transition:transform .12s ease;
+    touch-action:pan-y;
+    position:relative;
   }
   .ramo-card{
     background:var(--card);
     border:1px solid var(--border);
     padding:14px 18px;
   }
-  .ramo-card:active{transform:scale(0.97);}
+  .ramo-card:active{transform:none;}
   .ramo-card .name{font-weight:700;font-size:15.5px;font-family:var(--font-display);}
   .ramo-card .meta{font-size:11.5px;color:var(--ink-soft);margin-top:4px;}
 
@@ -80,6 +101,7 @@
     border:2px solid var(--accent);
     color:var(--accent-dark);
     background:var(--accent-wash);
+    margin-bottom:12px;
   }
   .add-card svg{width:26px;height:26px;}
   .add-card:active{background:var(--accent);color:#fff;}
@@ -280,9 +302,12 @@ function render(){
 
 function renderList(){
   const cards = state.ramos.map(r=>`
-    <div class="ramo-card" data-open="${r.id}">
-      <div class="name">${escapeHtml(r.nombre)}</div>
-      <div class="meta">${r.evaluaciones && r.evaluaciones.length ? r.evaluaciones.length+' evaluaciones' : 'Sin configurar'}</div>
+    <div class="ramo-wrap" data-wrap="${r.id}">
+      <div class="ramo-delete-bg" data-delete="${r.id}">Eliminar</div>
+      <div class="ramo-card" data-open="${r.id}">
+        <div class="name">${escapeHtml(r.nombre)}</div>
+        <div class="meta">${r.evaluaciones && r.evaluaciones.length ? r.evaluaciones.length+' evaluaciones' : 'Sin configurar'}</div>
+      </div>
     </div>
   `).join('');
 
@@ -509,6 +534,85 @@ function parseNota(raw){
   return raw;
 }
 
+const SWIPE_OPEN = -84;
+
+function attachSwipeToDelete(){
+  let openWrap = null;
+
+  function closeWrap(wrap, animate=true){
+    const card = wrap.querySelector('.ramo-card');
+    card.style.transition = animate ? 'transform .18s ease' : 'none';
+    card.style.transform = 'translateX(0px)';
+    wrap.dataset.open = 'false';
+    if(openWrap === wrap) openWrap = null;
+  }
+  function openWrapFn(wrap){
+    if(openWrap && openWrap !== wrap) closeWrap(openWrap);
+    const card = wrap.querySelector('.ramo-card');
+    card.style.transition = 'transform .18s ease';
+    card.style.transform = `translateX(${SWIPE_OPEN}px)`;
+    wrap.dataset.open = 'true';
+    openWrap = wrap;
+  }
+
+  document.querySelectorAll('.ramo-wrap').forEach(wrap=>{
+    const card = wrap.querySelector('.ramo-card');
+    let startX=0, startY=0, currentX=0, dragging=false, decided=null, moved=false;
+
+    card.addEventListener('pointerdown', e=>{
+      startX = e.clientX; startY = e.clientY;
+      currentX = wrap.dataset.open==='true' ? SWIPE_OPEN : 0;
+      dragging = true; decided=null; moved=false;
+      card.style.transition = 'none';
+      card.setPointerCapture(e.pointerId);
+    });
+
+    card.addEventListener('pointermove', e=>{
+      if(!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if(decided===null){
+        if(Math.abs(dx) > 6 || Math.abs(dy) > 6){
+          decided = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+        }
+      }
+      if(decided==='h'){
+        moved = true;
+        let x = currentX + dx;
+        x = Math.max(SWIPE_OPEN, Math.min(0, x));
+        card.style.transform = `translateX(${x}px)`;
+      }
+    });
+
+    function endDrag(e){
+      if(!dragging) return;
+      dragging = false;
+      if(decided==='h'){
+        const dx = e.clientX - startX;
+        const finalX = Math.max(SWIPE_OPEN, Math.min(0, currentX + dx));
+        if(finalX < SWIPE_OPEN/2) openWrapFn(wrap); else closeWrap(wrap);
+      } else if(!moved){
+        // fue un tap: si estaba abierto, ciérralo; si no, abre el ramo
+        if(wrap.dataset.open==='true'){ closeWrap(wrap); }
+        else { state.ramoId = wrap.dataset.wrap; state.view='detail'; render(); }
+      }
+    }
+    card.addEventListener('pointerup', endDrag);
+    card.addEventListener('pointercancel', endDrag);
+  });
+
+  document.querySelectorAll('[data-delete]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.delete;
+      const ramo = state.ramos.find(r=>r.id===id);
+      if(confirm(`¿Eliminar "${ramo.nombre}"? Esta acción no se puede deshacer.`)){
+        state.ramos = state.ramos.filter(r=>r.id!==id);
+        persist(); render();
+      }
+    };
+  });
+}
+
 function attachEvents(){
   if(state.view==='list'){
     document.getElementById('addRamoBtn').onclick = ()=>{
@@ -518,9 +622,7 @@ function attachEvents(){
         persist(); render();
       }
     };
-    document.querySelectorAll('[data-open]').forEach(el=>{
-      el.onclick = ()=>{ state.ramoId = el.dataset.open; state.view='detail'; render(); };
-    });
+    attachSwipeToDelete();
   }
 
   if(state.view==='detail'){
