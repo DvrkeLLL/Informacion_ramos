@@ -79,6 +79,7 @@
   .ramo-card, .add-card{
     min-height:84px;
     border-radius:var(--radius);
+    margin-bottom:12px;
     display:flex;
     flex-direction:column;
     align-items:center;
@@ -89,6 +90,7 @@
     touch-action:pan-y;
     position:relative;
   }
+  .ramo-wrap .ramo-card{ margin-bottom:0; }
   .ramo-card{
     background:var(--card);
     border:1px solid var(--border);
@@ -394,7 +396,7 @@ function renderList(){
   `).join('');
 
   return `
-    <header>
+    <header class="header-center">
       <h1>EDITAR RAMOS</h1>
       <div class="sub">Toca un ramo para configurar evaluaciones, horario e información</div>
     </header>
