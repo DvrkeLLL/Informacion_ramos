@@ -159,6 +159,7 @@
   }
   .back svg{width:20px;height:20px;display:block;}
   .topbar h2{font-family:var(--font-display);font-size:19px;margin:0;font-weight:700;}
+  .topbar h2 svg{width:14px;height:14px;color:var(--ink-soft);flex-shrink:0;}
 
   .section-btn{
     background:var(--card);border:1px solid var(--border);
@@ -336,6 +337,13 @@
   .inicio-prueba-tipo{font-size:15px;font-weight:700;margin-bottom:4px;}
   .inicio-prueba-porc{font-size:13px;color:var(--accent-dark);font-weight:700;font-family:var(--font-display);}
 
+  .gear-btn{
+    position:absolute;top:20px;right:18px;width:36px;height:36px;border-radius:12px;
+    background:var(--card);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .gear-btn svg{width:19px;height:19px;color:var(--ink);}
+
   .vert-table{margin-bottom:12px;overflow-x:auto;border:1px solid var(--border);border-radius:14px;background:var(--card);}
   .vert-table table{border-collapse:collapse;width:auto;}
   .vert-table th{
@@ -376,7 +384,7 @@ function parseRango(rango){
 const BLOQUES_MIN = BLOQUES.map(b=> ({...b, ...parseRango(b.rango)}));
 
 let state = {
-  section:'editar',      // editar | horario | promedio | calendario
+  section:'inicio',      // editar | horario | promedio | calendario | inicio
   view:'list',
   ramoId:null,
   calSubview:'lista',    // lista | calendario
@@ -408,6 +416,8 @@ const ICONS = {
   chev:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`,
   back:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`,
   check:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`,
+  settings:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  edit:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
 };
 
 function renderNavOnce(){
@@ -451,7 +461,7 @@ function updateNavActive(){
 
 function render(){
   const c = document.getElementById('scrollArea');
-  if(state.section==='inicio'){ c.innerHTML = renderInicio(); updateNavActive(); return; }
+  if(state.section==='inicio'){ c.innerHTML = renderInicio(); attachInicioEvents(); updateNavActive(); return; }
   if(state.section==='horario'){ c.innerHTML = renderHorario(); attachHorarioEvents(); updateNavActive(); return; }
   if(state.section==='promedio'){ c.innerHTML = renderPromedio(); attachPromedioEvents(); updateNavActive(); return; }
   if(state.section==='calendario'){ c.innerHTML = renderCalendarioSection(); attachCalendarioEvents(); updateNavActive(); return; }
@@ -492,7 +502,9 @@ function renderDetail(){
   return `
     <div class="topbar">
       <div class="back" data-back="list">${ICONS.back}</div>
-      <h2>${escapeHtml(r.nombre)}</h2>
+      <h2 id="renameRamoBtn" style="cursor:pointer;display:flex;align-items:center;gap:7px;">
+        ${escapeHtml(r.nombre)} ${ICONS.edit}
+      </h2>
     </div>
     <main style="padding-top:6px;">
       <div class="section-btn" data-go="evaluaciones">
@@ -1093,7 +1105,10 @@ function renderInicio(){
   const bloqueLabel = clase ? `${DIA_INICIAL[clase.dia]}${clase.bloque}` : '';
 
   return `
-    <header class="header-center"><h1>INICIO</h1></header>
+    <header class="header-center" style="position:relative;">
+      <div class="gear-btn" id="gearBtn">${ICONS.settings}</div>
+      <h1>INICIO</h1>
+    </header>
 
     <div class="inicio-tercio">
       ${clase ? `
@@ -1119,7 +1134,60 @@ function renderInicio(){
     <div class="inicio-tercio" style="padding-top:16px;">
       ${renderMiniCalendario()}
     </div>
+
+    <div id="settingsOverlay" class="hor-overlay">
+      <div class="hor-overlay-card">
+        <div class="hor-overlay-close" id="settingsClose">${ICONS.back}</div>
+        <h2>Configuración</h2>
+        <button class="btn-primary" id="exportBtn">Exportar datos (JSON)</button>
+        <div style="height:10px;"></div>
+        <button class="btn-ghost" id="importBtn" style="width:100%;">Importar datos (JSON)</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none;">
+      </div>
+    </div>
   `;
+}
+
+function attachInicioEvents(){
+  const gearBtn = document.getElementById('gearBtn');
+  const overlay = document.getElementById('settingsOverlay');
+  gearBtn.onclick = ()=> overlay.classList.add('show');
+  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.classList.remove('show'); };
+  document.getElementById('settingsClose').onclick = ()=> overlay.classList.remove('show');
+
+  document.getElementById('exportBtn').onclick = ()=>{
+    const dataStr = JSON.stringify(state.ramos, null, 2);
+    const blob = new Blob([dataStr], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'ramos_backup.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Datos exportados');
+  };
+
+  const fileInput = document.getElementById('importFile');
+  document.getElementById('importBtn').onclick = ()=> fileInput.click();
+  fileInput.onchange = (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      try{
+        const parsed = JSON.parse(ev.target.result);
+        if(!Array.isArray(parsed)) throw new Error('formato inválido');
+        state.ramos = parsed;
+        persist();
+        toast('Datos importados correctamente');
+        overlay.classList.remove('show');
+        render();
+      } catch(err){
+        toast('El archivo no es válido');
+      }
+    };
+    reader.readAsText(file);
+    fileInput.value = '';
+  };
 }
 function getAllEvaluacionesGlobal(){
   let list = [];
@@ -1343,6 +1411,14 @@ function attachEvents(){
 
   if(state.view==='detail'){
     document.querySelector('[data-back]').onclick = ()=>{ state.view='list'; render(); };
+    document.getElementById('renameRamoBtn').onclick = ()=>{
+      const r = getRamo();
+      const nuevo = prompt('Nuevo nombre del ramo:', r.nombre);
+      if(nuevo && nuevo.trim()){
+        r.nombre = nuevo.trim();
+        persist(); render();
+      }
+    };
     document.querySelectorAll('[data-go]').forEach(el=>{
       el.onclick = ()=>{ state.view = el.dataset.go; render(); };
     });
