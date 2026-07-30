@@ -216,6 +216,74 @@
   }
   .toast.show{opacity:1;}
   .hint{font-size:11px;color:var(--ink-soft);margin:0 18px 14px;line-height:1.5;}
+
+  /* ---------- HORARIO ---------- */
+  .hor-dias-header{
+    display:grid;grid-template-columns:repeat(5,1fr);gap:8px;
+    padding:0 14px;margin-bottom:8px;
+  }
+  .hor-dias-header div{
+    text-align:center;font-family:var(--font-display);font-weight:700;
+    font-size:13px;color:var(--ink-soft);
+  }
+  .hor-grid{
+    display:grid;grid-template-columns:repeat(5,1fr);gap:8px;
+    padding:0 14px 6px;
+  }
+  .hor-card{
+    background:var(--card);border:1px solid var(--border);border-radius:14px;
+    height:78px;display:flex;flex-direction:column;overflow:hidden;cursor:pointer;
+  }
+  .hor-card.empty{
+    background:transparent;border:1px dashed var(--border);cursor:default;
+  }
+  .hor-card:active{background:var(--accent-wash);}
+  .hor-ramo{
+    flex:1;display:flex;align-items:center;justify-content:center;
+    font-size:9.5px;font-weight:700;text-align:center;color:var(--ink-soft);
+    padding:2px 4px;line-height:1.15;
+    border-bottom:1px solid var(--border);
+    font-family:var(--font-display);
+  }
+  .hor-sala{
+    flex:2;display:flex;align-items:center;justify-content:center;
+    font-size:17px;font-weight:800;color:var(--accent-dark);
+    font-family:var(--font-display);
+  }
+  .hor-almuerzo{
+    grid-column:1 / -1;
+    display:flex;align-items:center;justify-content:center;
+    height:26px;margin:2px 0;
+  }
+  .hor-almuerzo span{
+    font-size:10px;font-weight:700;color:var(--ink-soft);
+    letter-spacing:0.05em;text-transform:uppercase;
+    border-top:1px dashed var(--border);border-bottom:1px dashed var(--border);
+    padding:4px 14px;
+  }
+
+  .hor-overlay{
+    display:none;position:absolute;inset:0;background:rgba(27,42,34,0.45);
+    z-index:20;align-items:center;justify-content:center;padding:24px;
+  }
+  .hor-overlay.show{display:flex;}
+  .hor-overlay-card{
+    position:relative;background:var(--card);border-radius:var(--radius);
+    padding:26px 22px 22px;width:100%;max-width:320px;
+    box-shadow:0 20px 50px rgba(0,0,0,0.3);
+  }
+  .hor-overlay-card h2{
+    font-family:var(--font-display);font-size:19px;margin:0 0 10px;font-weight:700;
+  }
+  .hor-overlay-close{
+    position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:9px;
+    background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;
+    transform:rotate(180deg);
+  }
+  .hor-overlay-close svg{width:16px;height:16px;}
+  .hor-line{font-size:13.5px;margin-bottom:8px;color:var(--ink);}
+  .hor-line b{color:var(--ink-soft);font-family:var(--font-display);font-weight:700;font-size:12px;}
+  #hoHorario{font-weight:700;font-family:var(--font-display);color:var(--accent-dark);margin-bottom:14px;}
 </style>
 </head>
 <body>
@@ -236,10 +304,15 @@ const BLOQUES = [
 ];
 
 let state = {
+  section:'editar',      // editar | horario
   view:'list',
   ramoId:null,
   ramos: JSON.parse(localStorage.getItem('ramos_v1') || '[]')
 };
+
+const DIAS_ORDEN = ['Lunes','Martes','Miércoles','Jueves','Viernes'];
+const DIA_HEADER = {Lunes:'L',Martes:'Ma',Miércoles:'Mi',Jueves:'J',Viernes:'V'};
+const DIA_INICIAL = {Lunes:'L',Martes:'M',Miércoles:'W',Jueves:'J',Viernes:'V'};
 
 function persist(){ localStorage.setItem('ramos_v1', JSON.stringify(state.ramos)); }
 function getRamo(){ return state.ramos.find(r=>r.id===state.ramoId); }
@@ -277,7 +350,8 @@ function renderNavOnce(){
   `).join('');
   nav.querySelectorAll('[data-nav]').forEach(el=>{
     el.onclick = ()=>{
-      if(el.dataset.nav==='plus'){ state.view='list'; render(); }
+      if(el.dataset.nav==='plus'){ state.section='editar'; state.view='list'; render(); }
+      else if(el.dataset.nav==='horario'){ state.section='horario'; render(); }
       else toast('Esa sección aún no está construida');
     };
   });
@@ -285,12 +359,14 @@ function renderNavOnce(){
 }
 function updateNavActive(){
   document.querySelectorAll('#bottomNav .tab').forEach(el=>{
-    el.classList.toggle('active', el.dataset.nav==='plus');
+    const isActive = (state.section==='editar' && el.dataset.nav==='plus') || (state.section==='horario' && el.dataset.nav==='horario');
+    el.classList.toggle('active', isActive);
   });
 }
 
 function render(){
   const c = document.getElementById('scrollArea');
+  if(state.section==='horario'){ c.innerHTML = renderHorario(); attachHorarioEvents(); updateNavActive(); return; }
   if(state.view==='list') c.innerHTML = renderList();
   else if(state.view==='detail') c.innerHTML = renderDetail();
   else if(state.view==='evaluaciones') c.innerHTML = renderEvaluaciones();
@@ -611,6 +687,91 @@ function attachSwipeToDelete(){
       }
     };
   });
+}
+
+function buildScheduleMap(){
+  const map = {};
+  state.ramos.forEach(r=>{
+    (r.sesiones||[]).forEach(s=>{
+      if(s.dia && s.bloque){
+        const key = s.dia+'-'+s.bloque;
+        if(!map[key]){
+          map[key] = {
+            ramo:r.nombre, ubicacion:s.ubicacion||'-', tipo:s.tipo||'T',
+            profesor:r.profesor||'-', seccion:r.seccion||'-',
+            dia:s.dia, bloque:s.bloque
+          };
+        }
+      }
+    });
+  });
+  return map;
+}
+
+function renderHorario(){
+  const map = buildScheduleMap();
+  let gridHtml = '';
+  for(let b=1;b<=6;b++){
+    for(const dia of DIAS_ORDEN){
+      const slot = map[dia+'-'+b];
+      if(slot){
+        gridHtml += `
+          <div class="hor-card" data-dia="${slot.dia}" data-bloque="${slot.bloque}">
+            <div class="hor-ramo">${escapeHtml(slot.ramo)}</div>
+            <div class="hor-sala">${escapeHtml(slot.ubicacion)}</div>
+          </div>`;
+      } else {
+        gridHtml += `<div class="hor-card empty"></div>`;
+      }
+    }
+    if(b===3){
+      gridHtml += `<div class="hor-almuerzo"><span>Almuerzo</span></div>`;
+    }
+  }
+
+  return `
+    <header style="text-align:center;">
+      <h1 style="text-align:center;">HORARIO</h1>
+    </header>
+    <div class="hor-dias-header">
+      ${DIAS_ORDEN.map(d=>`<div>${DIA_HEADER[d]}</div>`).join('')}
+    </div>
+    <div class="hor-grid">${gridHtml}</div>
+    <div id="horarioOverlay" class="hor-overlay">
+      <div class="hor-overlay-card">
+        <div class="hor-overlay-close" id="horarioClose">${ICONS.back}</div>
+        <h2 id="hoTitulo"></h2>
+        <div class="hor-line" id="hoHorario"></div>
+        <div class="hor-line"><b>Ubicación:</b> <span id="hoUbicacion"></span></div>
+        <div class="hor-line"><b>Profesor:</b> <span id="hoProfesor"></span></div>
+        <div class="hor-line"><b>Sección:</b> <span id="hoSeccion"></span></div>
+        <div class="hor-line"><b>Tipo:</b> <span id="hoTipo"></span></div>
+      </div>
+    </div>
+  `;
+}
+
+function attachHorarioEvents(){
+  const map = buildScheduleMap();
+  document.querySelectorAll('.hor-card:not(.empty)').forEach(card=>{
+    card.onclick = ()=>{
+      const dia = card.dataset.dia, bloque = card.dataset.bloque;
+      const slot = map[dia+'-'+bloque];
+      if(!slot) return;
+      const bInfo = BLOQUES.find(b=>String(b.n)===String(bloque));
+      const rango = bInfo ? bInfo.rango.replace('–','-') : '';
+      document.getElementById('hoTitulo').textContent = slot.ramo;
+      document.getElementById('hoHorario').textContent = `Horario(${DIA_INICIAL[dia]}${bloque}): ${rango}`;
+      document.getElementById('hoUbicacion').textContent = slot.ubicacion;
+      document.getElementById('hoProfesor').textContent = slot.profesor;
+      document.getElementById('hoSeccion').textContent = slot.seccion;
+      document.getElementById('hoTipo').textContent = slot.tipo;
+      document.getElementById('horarioOverlay').classList.add('show');
+    };
+  });
+  const overlay = document.getElementById('horarioOverlay');
+  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.classList.remove('show'); };
+  document.getElementById('horarioClose').onclick = ()=> overlay.classList.remove('show');
 }
 
 function attachEvents(){
