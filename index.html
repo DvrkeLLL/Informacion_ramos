@@ -19,6 +19,10 @@
     --card:#FFFFFF;
     --border:#D9E0D6;
     --th-bg:#E9EEE6;
+    --pastel-green-bg:#D9F0DF;
+    --pastel-green-ink:#2F6E4E;
+    --pastel-orange-bg:#FBE4C8;
+    --pastel-orange-ink:#B0692A;
     --radius:20px;
     --radius-sm:14px;
     --font-display:'Space Grotesk',sans-serif;
@@ -287,6 +291,35 @@
   .hor-line{font-size:13.5px;margin-bottom:8px;color:var(--ink);}
   .hor-line b{color:var(--ink-soft);font-family:var(--font-display);font-weight:700;font-size:12px;}
   #hoHorario{font-weight:700;font-family:var(--font-display);color:var(--accent-dark);margin-bottom:14px;}
+
+  /* ---------- CALENDARIO ---------- */
+  .cal-tabs{display:flex;gap:10px;padding:0 18px;margin-bottom:14px;}
+  .cal-tab{
+    flex:1;padding:14px;border-radius:var(--radius-sm);text-align:center;
+    font-family:var(--font-display);font-weight:700;font-size:13.5px;cursor:pointer;
+    background:var(--pastel-orange-bg);color:var(--pastel-orange-ink);
+  }
+  .cal-tab.active{background:var(--pastel-green-bg);color:var(--pastel-green-ink);}
+
+  .ticket{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto;}
+  .ticket svg{width:14px;height:14px;}
+  .cal-fecha-cell{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;}
+
+  .cal-month-card{margin:0 18px 18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px 16px;}
+  .cal-month-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .cal-month-header h2{font-family:var(--font-display);font-size:18px;font-weight:700;margin:0;text-align:center;flex:1;}
+  .cal-arrow{width:32px;height:32px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+  .cal-arrow svg{width:15px;height:15px;}
+  .cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-family:var(--font-display);font-weight:700;font-size:11px;color:var(--ink-soft);}
+  .cal-divider{height:1px;background:var(--border);margin:8px 14px 10px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+  .cal-day{
+    aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+    border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink);
+  }
+  .cal-day.empty{cursor:default;}
+  .cal-day-green{background:var(--pastel-green-bg);color:var(--pastel-green-ink);}
+  .cal-day-orange{background:var(--pastel-orange-bg);color:var(--pastel-orange-ink);}
 </style>
 </head>
 <body>
@@ -307,15 +340,19 @@ const BLOQUES = [
 ];
 
 let state = {
-  section:'editar',      // editar | horario
+  section:'editar',      // editar | horario | promedio | calendario
   view:'list',
   ramoId:null,
+  calSubview:'lista',    // lista | calendario
+  calYear:null,
+  calMonth:null,
   ramos: JSON.parse(localStorage.getItem('ramos_v1') || '[]')
 };
 
 const DIAS_ORDEN = ['Lunes','Martes','Miércoles','Jueves','Viernes'];
 const DIA_HEADER = {Lunes:'L',Martes:'Ma',Miércoles:'Mi',Jueves:'J',Viernes:'V'};
 const DIA_INICIAL = {Lunes:'L',Martes:'M',Miércoles:'W',Jueves:'J',Viernes:'V'};
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 function persist(){ localStorage.setItem('ramos_v1', JSON.stringify(state.ramos)); }
 function getRamo(){ return state.ramos.find(r=>r.id===state.ramoId); }
@@ -334,6 +371,7 @@ const ICONS = {
   calendario:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M8 3v4M16 3v4"/><rect x="6.5" y="12" width="3" height="3" fill="currentColor" stroke="none"/></svg>`,
   chev:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`,
   back:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`,
+  check:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`,
 };
 
 function renderNavOnce(){
@@ -356,6 +394,7 @@ function renderNavOnce(){
       if(el.dataset.nav==='plus'){ state.section='editar'; state.view='list'; render(); }
       else if(el.dataset.nav==='horario'){ state.section='horario'; render(); }
       else if(el.dataset.nav==='promedio'){ state.section='promedio'; render(); }
+      else if(el.dataset.nav==='calendario'){ state.section='calendario'; state.calSubview='lista'; render(); }
       else toast('Esa sección aún no está construida');
     };
   });
@@ -366,7 +405,8 @@ function updateNavActive(){
     const isActive =
       (state.section==='editar' && el.dataset.nav==='plus') ||
       (state.section==='horario' && el.dataset.nav==='horario') ||
-      (state.section==='promedio' && el.dataset.nav==='promedio');
+      (state.section==='promedio' && el.dataset.nav==='promedio') ||
+      (state.section==='calendario' && el.dataset.nav==='calendario');
     el.classList.toggle('active', isActive);
   });
 }
@@ -375,6 +415,7 @@ function render(){
   const c = document.getElementById('scrollArea');
   if(state.section==='horario'){ c.innerHTML = renderHorario(); attachHorarioEvents(); updateNavActive(); return; }
   if(state.section==='promedio'){ c.innerHTML = renderPromedio(); attachPromedioEvents(); updateNavActive(); return; }
+  if(state.section==='calendario'){ c.innerHTML = renderCalendarioSection(); attachCalendarioEvents(); updateNavActive(); return; }
   if(state.view==='list') c.innerHTML = renderList();
   else if(state.view==='detail') c.innerHTML = renderDetail();
   else if(state.view==='evaluaciones') c.innerHTML = renderEvaluaciones();
@@ -876,6 +917,186 @@ function attachPromedioEvents(){
   const overlay = document.getElementById('promOverlay');
   overlay.onclick = (e)=>{ if(e.target===overlay) overlay.classList.remove('show'); };
   document.getElementById('promClose').onclick = ()=> overlay.classList.remove('show');
+}
+
+/* ============ DATOS: evaluaciones globales (todas las de todos los ramos) ============ */
+function getAllEvaluacionesGlobal(){
+  let list = [];
+  state.ramos.forEach(r=>{
+    (r.evaluaciones||[]).forEach(e=>{
+      if(e.tipo && e.tipo.trim()!==''){
+        list.push({
+          ramo:r.nombre, tipo:e.tipo, sala:e.sala||'-', porcentaje:e.porcentaje||'',
+          fecha:e.fecha||'', hora:e.hora||''
+        });
+      }
+    });
+  });
+  list.sort((a,b)=>{
+    if(!a.fecha && !b.fecha) return 0;
+    if(!a.fecha) return 1;
+    if(!b.fecha) return -1;
+    return a.fecha.localeCompare(b.fecha);
+  });
+  return list;
+}
+function formatFechaCorta(iso){
+  if(!iso) return '-';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y.slice(2)}`;
+}
+function esPasada(iso){
+  if(!iso) return false;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const fecha = new Date(iso+'T00:00:00');
+  return fecha <= hoy;
+}
+function renderTicket(passed){
+  const cls = passed ? 'cal-day-green' : 'cal-day-orange';
+  return `<div class="ticket ${cls}">${ICONS.check}</div>`;
+}
+function tablaEvaluaciones(evals){
+  if(!evals.length){
+    return `<div class="hint" style="margin:12px 18px 0;">No hay evaluaciones para mostrar.</div>`;
+  }
+  const rows = evals.map((e,i)=>`
+    <tr>
+      <td class="num-cell">${i+1}</td>
+      <td>${escapeHtml(e.ramo)}</td>
+      <td>${escapeHtml(e.tipo)}</td>
+      <td>${escapeHtml(e.sala)}</td>
+      <td>${e.porcentaje || '-'}</td>
+      <td class="cal-fecha-cell" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</td>
+      <td>${renderTicket(esPasada(e.fecha))}</td>
+    </tr>
+  `).join('');
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>N</th><th>Ramo</th><th>Prueba</th><th>Sala</th><th>%</th><th>Fecha</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ============ VISTA: CALENDARIO (contenedor con las 2 sub-vistas) ============ */
+function renderCalendarioSection(){
+  if(state.calYear===null){
+    const hoy = new Date();
+    state.calYear = hoy.getFullYear();
+    state.calMonth = hoy.getMonth();
+  }
+  return `
+    <header class="header-center"><h1>CALENDARIO</h1></header>
+    <div class="cal-tabs">
+      <div class="cal-tab ${state.calSubview==='lista'?'active':''}" data-calsub="lista">Lista Pruebas</div>
+      <div class="cal-tab ${state.calSubview==='calendario'?'active':''}" data-calsub="calendario">Calendario Prueba</div>
+    </div>
+    <div id="calContent">
+      ${state.calSubview==='lista' ? tablaEvaluaciones(getAllEvaluacionesGlobal()) : renderCalendarioMes()}
+    </div>
+    <div id="diaOverlay" class="hor-overlay">
+      <div class="hor-overlay-card">
+        <div class="hor-overlay-close" id="diaClose">${ICONS.back}</div>
+        <h2 id="diaTitulo"></h2>
+        <div id="diaContenido"></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCalendarioMes(){
+  const year = state.calYear, month = state.calMonth;
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const startOffset = (firstDay.getDay()+6) % 7; // Lunes=0 ... Domingo=6
+
+  const evalsByDay = {};
+  getAllEvaluacionesGlobal().filter(e=>e.fecha).forEach(e=>{
+    const d = new Date(e.fecha+'T00:00:00');
+    if(d.getFullYear()===year && d.getMonth()===month){
+      const day = d.getDate();
+      if(!evalsByDay[day]) evalsByDay[day]=[];
+      evalsByDay[day].push(e);
+    }
+  });
+
+  let cells = '';
+  for(let i=0;i<startOffset;i++) cells += `<div class="cal-day empty"></div>`;
+  for(let day=1; day<=daysInMonth; day++){
+    const dayEvals = evalsByDay[day];
+    let cls = 'cal-day';
+    if(dayEvals && dayEvals.length){
+      cls += esPasada(dayEvals[0].fecha) ? ' cal-day-green' : ' cal-day-orange';
+    }
+    cells += `<div class="${cls}" data-day="${day}">${day}</div>`;
+  }
+
+  return `
+    <div class="cal-month-card">
+      <div class="cal-month-header">
+        <div class="cal-arrow" id="calPrev">${ICONS.back}</div>
+        <h2>${MESES[month]} ${year}</h2>
+        <div class="cal-arrow" id="calNext">${ICONS.chev}</div>
+      </div>
+      <div class="cal-weekdays">
+        <div>L</div><div>Ma</div><div>Mi</div><div>J</div><div>V</div><div>S</div><div>D</div>
+      </div>
+      <div class="cal-divider"></div>
+      <div class="cal-grid">${cells}</div>
+    </div>
+  `;
+}
+
+function attachCalendarioEvents(){
+  document.querySelectorAll('.cal-tab').forEach(tab=>{
+    tab.onclick = ()=>{
+      const sub = tab.dataset.calsub;
+      if(sub==='calendario'){
+        const hoy = new Date();
+        state.calYear = hoy.getFullYear();
+        state.calMonth = hoy.getMonth();
+      }
+      state.calSubview = sub;
+      render();
+    };
+  });
+
+  if(state.calSubview==='lista'){
+    document.querySelectorAll('.cal-fecha-cell').forEach(cell=>{
+      cell.onclick = ()=>{
+        const hora = cell.dataset.hora;
+        toast(hora ? `Hora: ${hora}` : 'Sin hora registrada');
+      };
+    });
+  } else {
+    document.getElementById('calPrev').onclick = ()=>{
+      state.calMonth--; if(state.calMonth<0){ state.calMonth=11; state.calYear--; }
+      render();
+    };
+    document.getElementById('calNext').onclick = ()=>{
+      state.calMonth++; if(state.calMonth>11){ state.calMonth=0; state.calYear++; }
+      render();
+    };
+    document.querySelectorAll('.cal-day:not(.empty)').forEach(cell=>{
+      cell.onclick = ()=>{
+        const day = parseInt(cell.dataset.day,10);
+        const evals = getAllEvaluacionesGlobal().filter(e=>{
+          if(!e.fecha) return false;
+          const d = new Date(e.fecha+'T00:00:00');
+          return d.getFullYear()===state.calYear && d.getMonth()===state.calMonth && d.getDate()===day;
+        });
+        document.getElementById('diaTitulo').textContent = `${day} de ${MESES[state.calMonth]}`;
+        document.getElementById('diaContenido').innerHTML = tablaEvaluaciones(evals);
+        document.getElementById('diaOverlay').classList.add('show');
+      };
+    });
+  }
+
+  const overlay = document.getElementById('diaOverlay');
+  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.classList.remove('show'); };
+  document.getElementById('diaClose').onclick = ()=> overlay.classList.remove('show');
 }
 
 function attachEvents(){
