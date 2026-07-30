@@ -321,15 +321,20 @@
   .cal-day-green{background:var(--pastel-green-bg);color:var(--pastel-green-ink);}
   .cal-day-orange{background:var(--pastel-orange-bg);color:var(--pastel-orange-ink);}
 
-  .vert-table{margin-bottom:12px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--card);}
-  .vert-table table{width:100%;border-collapse:collapse;}
+  .vert-table{margin-bottom:12px;overflow-x:auto;border:1px solid var(--border);border-radius:14px;background:var(--card);}
+  .vert-table table{border-collapse:collapse;width:100%;}
   .vert-table th{
     background:var(--th-bg);font-family:var(--font-display);font-size:10px;text-transform:uppercase;
-    letter-spacing:0.03em;color:var(--ink-soft);padding:9px 10px;text-align:left;width:78px;
+    letter-spacing:0.03em;color:var(--ink-soft);padding:9px 10px;text-align:left;width:74px;
+    white-space:nowrap;position:sticky;left:0;
     border-bottom:1px solid var(--border);border-right:1px solid var(--border);
   }
-  .vert-table td{padding:9px 10px;font-size:13px;border-bottom:1px solid var(--border);}
+  .vert-table td{
+    padding:9px 10px;font-size:13px;text-align:center;min-width:84px;
+    border-bottom:1px solid var(--border);border-right:1px solid var(--border);
+  }
   .vert-table tr:last-child th, .vert-table tr:last-child td{border-bottom:none;}
+  .vert-table td:last-child{border-right:none;}
 </style>
 </head>
 <body>
@@ -990,6 +995,29 @@ function tablaEvaluaciones(evals){
   `;
 }
 
+function tablaEvaluacionesVertical(evals){
+  if(!evals.length){
+    return `<div class="hint" style="margin:12px 0 0;">No hay evaluaciones programadas este día.</div>`;
+  }
+  const fila = (label, celdas) => `<tr><th>${label}</th>${celdas}</tr>`;
+
+  const filaN       = fila('N', evals.map((e,i)=>`<td>${i+1}</td>`).join(''));
+  const filaRamo     = fila('Ramo', evals.map(e=>`<td>${escapeHtml(e.ramo)}</td>`).join(''));
+  const filaPrueba   = fila('Prueba', evals.map(e=>`<td>${escapeHtml(e.tipo)}</td>`).join(''));
+  const filaSala     = fila('Sala', evals.map(e=>`<td>${escapeHtml(e.sala)}</td>`).join(''));
+  const filaPorc     = fila('%', evals.map(e=>`<td>${e.porcentaje ? e.porcentaje+'%' : '-'}</td>`).join(''));
+  const filaFecha    = fila('Fecha', evals.map(e=>`<td class="cal-fecha-cell" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</td>`).join(''));
+  const filaEstado   = fila('Estado', evals.map(e=>`<td>${renderTicket(esPasada(e.fecha))}</td>`).join(''));
+
+  return `
+    <div class="vert-table">
+      <table>
+        <tbody>${filaN}${filaRamo}${filaPrueba}${filaSala}${filaPorc}${filaFecha}${filaEstado}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 /* ============ VISTA: CALENDARIO (contenedor con las 2 sub-vistas) ============ */
 function renderCalendarioSection(){
   if(state.calYear===null){
@@ -1098,7 +1126,13 @@ function attachCalendarioEvents(){
           return d.getFullYear()===state.calYear && d.getMonth()===state.calMonth && d.getDate()===day;
         });
         document.getElementById('diaTitulo').textContent = `${day} de ${MESES[state.calMonth]}`;
-        document.getElementById('diaContenido').innerHTML = tablaEvaluaciones(evals);
+        document.getElementById('diaContenido').innerHTML = tablaEvaluacionesVertical(evals);
+        document.querySelectorAll('#diaContenido .cal-fecha-cell').forEach(cell=>{
+          cell.onclick = ()=>{
+            const hora = cell.dataset.hora;
+            toast(hora ? `Hora: ${hora}` : 'Sin hora registrada');
+          };
+        });
         document.getElementById('diaOverlay').classList.add('show');
       };
     });
