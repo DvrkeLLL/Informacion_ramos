@@ -320,6 +320,16 @@
   .cal-day.empty{cursor:default;}
   .cal-day-green{background:var(--pastel-green-bg);color:var(--pastel-green-ink);}
   .cal-day-orange{background:var(--pastel-orange-bg);color:var(--pastel-orange-ink);}
+
+  .vert-table{margin-bottom:12px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--card);}
+  .vert-table table{width:100%;border-collapse:collapse;}
+  .vert-table th{
+    background:var(--th-bg);font-family:var(--font-display);font-size:10px;text-transform:uppercase;
+    letter-spacing:0.03em;color:var(--ink-soft);padding:9px 10px;text-align:left;width:78px;
+    border-bottom:1px solid var(--border);border-right:1px solid var(--border);
+  }
+  .vert-table td{padding:9px 10px;font-size:13px;border-bottom:1px solid var(--border);}
+  .vert-table tr:last-child th, .vert-table tr:last-child td{border-bottom:none;}
 </style>
 </head>
 <body>
@@ -965,7 +975,7 @@ function tablaEvaluaciones(evals){
       <td>${escapeHtml(e.ramo)}</td>
       <td>${escapeHtml(e.tipo)}</td>
       <td>${escapeHtml(e.sala)}</td>
-      <td>${e.porcentaje || '-'}</td>
+      <td>${e.porcentaje ? e.porcentaje+'%' : '-'}</td>
       <td class="cal-fecha-cell" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</td>
       <td>${renderTicket(esPasada(e.fecha))}</td>
     </tr>
