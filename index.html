@@ -366,11 +366,10 @@
   .cal-tab.active{background:var(--pastel-green-bg);color:var(--pastel-green-ink);}
 
   .cal-fecha-cell{
-    cursor:pointer;padding-bottom:2px;
-    border-bottom:2px solid transparent;
+    cursor:pointer;padding:3px 9px;border-radius:8px;display:inline-block;font-weight:700;
   }
-  .cal-fecha-cell.pasada{border-bottom-color:var(--pastel-green-ink);}
-  .cal-fecha-cell.pendiente{border-bottom-color:var(--pastel-orange-ink);}
+  .cal-fecha-cell.pasada{background:var(--pastel-green-bg);color:var(--pastel-green-ink);}
+  .cal-fecha-cell.pendiente{background:var(--pastel-orange-bg);color:var(--pastel-orange-ink);}
 
   .cal-month-card{margin:0 18px 18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px 16px;}
   .cal-month-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
@@ -1194,12 +1193,11 @@ function buscarClaseCercana(){
       if(!info) continue;
       if(nowMin>=info.start && nowMin<=info.end){
         const elapsed = nowMin - info.start;
-        let salaMostrar = s.sala;
         if(elapsed>=40){
           const sig = buscarSiguienteSesion(i, sesiones);
-          if(sig) salaMostrar = sig.sala;
+          if(sig) return {nombre:sig.ramo, sala:sig.sala, bloque:sig.bloque, dia:sig.dia};
         }
-        return {nombre:s.ramo, sala:salaMostrar, bloque:s.bloque, dia:diaHoy};
+        return {nombre:s.ramo, sala:s.sala, bloque:s.bloque, dia:diaHoy};
       }
     }
     for(const s of sesiones){
