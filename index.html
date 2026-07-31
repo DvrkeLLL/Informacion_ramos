@@ -30,6 +30,8 @@
     --pastel-green-ink:#2F6E4E;
     --pastel-orange-bg:#FBE4C8;
     --pastel-orange-ink:#B0692A;
+    --pastel-yellow-bg:#FBF0B8;
+    --pastel-yellow-ink:#8A7418;
     --radius:20px;
     --radius-sm:14px;
     --font-display:'Space Grotesk',sans-serif;
@@ -376,13 +378,21 @@
   .cal-divider{height:1px;background:var(--border);margin:8px 14px 10px;}
   .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
   .cal-day{
+    position:relative;
     aspect-ratio:1;display:flex;align-items:center;justify-content:center;
     border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink);
   }
   .cal-day.empty{cursor:default;}
   .cal-day-green{background:var(--pastel-green-bg);color:var(--pastel-green-ink);}
   .cal-day-orange{background:var(--pastel-orange-bg);color:var(--pastel-orange-ink);}
+  .cal-day-today{background:var(--pastel-yellow-bg);color:var(--pastel-yellow-ink);}
   .cal-day.static{cursor:default;}
+  .cal-day-dot{
+    position:absolute;bottom:3px;left:50%;transform:translateX(-50%);
+    width:6px;height:6px;border-radius:50%;
+    background:var(--pastel-yellow-ink);
+    box-shadow:0 0 0 1.5px var(--pastel-yellow-bg);
+  }
 
   /* ---------- INICIO ---------- */
   .inicio-tercio{padding:22px 20px;text-align:center;}
@@ -411,7 +421,7 @@
     border-bottom:1px solid var(--border);border-right:1px solid var(--border);
   }
   .vert-table td{
-    padding:9px 14px;font-size:13px;text-align:center;white-space:nowrap;
+    padding:9px 14px;font-size:13px;text-align:left;white-space:normal;
     border-bottom:1px solid var(--border);border-right:1px solid var(--border);
   }
   .vert-table tr:last-child th, .vert-table tr:last-child td{border-bottom:none;}
@@ -1258,7 +1268,9 @@ function renderMiniCalendario(){
     if(dayEvals && dayEvals.length){
       cls += esPasada(dayEvals[0].fecha) ? ' cal-day-green' : ' cal-day-orange';
     }
-    cells += `<div class="${cls}">${day}</div>`;
+    const isHoy = day===hoy.getDate();
+    const dot = isHoy ? '<div class="cal-day-dot"></div>' : '';
+    cells += `<div class="${cls}">${day}${dot}</div>`;
   }
 
   return `
@@ -1490,6 +1502,7 @@ function renderCalendarioMes(){
     }
   });
 
+  const hoyReal = new Date();
   let cells = '';
   for(let i=0;i<startOffset;i++) cells += `<div class="cal-day empty"></div>`;
   for(let day=1; day<=daysInMonth; day++){
@@ -1498,7 +1511,9 @@ function renderCalendarioMes(){
     if(dayEvals && dayEvals.length){
       cls += esPasada(dayEvals[0].fecha) ? ' cal-day-green' : ' cal-day-orange';
     }
-    cells += `<div class="${cls}" data-day="${day}">${day}</div>`;
+    const isHoy = year===hoyReal.getFullYear() && month===hoyReal.getMonth() && day===hoyReal.getDate();
+    const dot = isHoy ? '<div class="cal-day-dot"></div>' : '';
+    cells += `<div class="${cls}" data-day="${day}">${day}${dot}</div>`;
   }
 
   return `
