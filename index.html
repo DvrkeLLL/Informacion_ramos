@@ -365,9 +365,12 @@
   }
   .cal-tab.active{background:var(--pastel-green-bg);color:var(--pastel-green-ink);}
 
-  .ticket{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto;}
-  .ticket svg{width:14px;height:14px;}
-  .cal-fecha-cell{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;}
+  .cal-fecha-cell{
+    cursor:pointer;padding-bottom:2px;
+    border-bottom:2px solid transparent;
+  }
+  .cal-fecha-cell.pasada{border-bottom-color:var(--pastel-green-ink);}
+  .cal-fecha-cell.pendiente{border-bottom-color:var(--pastel-orange-ink);}
 
   .cal-month-card{margin:0 18px 18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px 16px;}
   .cal-month-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
@@ -387,12 +390,6 @@
   .cal-day-orange{background:var(--pastel-orange-bg);color:var(--pastel-orange-ink);}
   .cal-day-today{background:var(--pastel-yellow-bg);color:var(--pastel-yellow-ink);}
   .cal-day.static{cursor:default;}
-  .cal-day-dot{
-    position:absolute;bottom:3px;left:50%;transform:translateX(-50%);
-    width:6px;height:6px;border-radius:50%;
-    background:var(--pastel-yellow-ink);
-    box-shadow:0 0 0 1.5px var(--pastel-yellow-bg);
-  }
 
   /* ---------- INICIO ---------- */
   .inicio-tercio{padding:22px 20px;text-align:center;}
@@ -1264,13 +1261,14 @@ function renderMiniCalendario(){
   for(let i=0;i<startOffset;i++) cells += `<div class="cal-day empty"></div>`;
   for(let day=1; day<=daysInMonth; day++){
     const dayEvals = evalsByDay[day];
+    const esHoy = day===hoy.getDate();
     let cls = 'cal-day static';
     if(dayEvals && dayEvals.length){
       cls += esPasada(dayEvals[0].fecha) ? ' cal-day-green' : ' cal-day-orange';
+    } else if(esHoy){
+      cls += ' cal-day-today';
     }
-    const isHoy = day===hoy.getDate();
-    const dot = isHoy ? '<div class="cal-day-dot"></div>' : '';
-    cells += `<div class="${cls}">${day}${dot}</div>`;
+    cells += `<div class="${cls}">${day}</div>`;
   }
 
   return `
@@ -1408,10 +1406,6 @@ function esPasada(iso){
   const fecha = new Date(iso+'T00:00:00');
   return fecha <= hoy;
 }
-function renderTicket(passed){
-  const cls = passed ? 'cal-day-green' : 'cal-day-orange';
-  return `<div class="ticket ${cls}">${ICONS.check}</div>`;
-}
 function tablaEvaluaciones(evals){
   if(!evals.length){
     return `<div class="hint" style="margin:12px 18px 0;">No hay evaluaciones para mostrar.</div>`;
@@ -1423,14 +1417,13 @@ function tablaEvaluaciones(evals){
       <td>${escapeHtml(e.tipo)}</td>
       <td>${escapeHtml(e.sala)}</td>
       <td>${e.porcentaje ? e.porcentaje+'%' : '-'}</td>
-      <td class="cal-fecha-cell" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</td>
-      <td>${renderTicket(esPasada(e.fecha))}</td>
+      <td><span class="cal-fecha-cell ${esPasada(e.fecha)?'pasada':'pendiente'}" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</span></td>
     </tr>
   `).join('');
   return `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>N</th><th>Ramo</th><th>Prueba</th><th>Sala</th><th>%</th><th>Fecha</th><th></th></tr></thead>
+        <thead><tr><th>N</th><th>Ramo</th><th>Prueba</th><th>Sala</th><th>%</th><th>Fecha</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -1448,13 +1441,12 @@ function tablaEvaluacionesVertical(evals){
   const filaPrueba   = fila('Prueba', evals.map(e=>`<td>${escapeHtml(e.tipo)}</td>`).join(''));
   const filaSala     = fila('Sala', evals.map(e=>`<td>${escapeHtml(e.sala)}</td>`).join(''));
   const filaPorc     = fila('%', evals.map(e=>`<td>${e.porcentaje ? e.porcentaje+'%' : '-'}</td>`).join(''));
-  const filaFecha    = fila('Fecha', evals.map(e=>`<td class="cal-fecha-cell" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</td>`).join(''));
-  const filaEstado   = fila('Estado', evals.map(e=>`<td>${renderTicket(esPasada(e.fecha))}</td>`).join(''));
+  const filaFecha    = fila('Fecha', evals.map(e=>`<td><span class="cal-fecha-cell ${esPasada(e.fecha)?'pasada':'pendiente'}" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</span></td>`).join(''));
 
   return `
     <div class="vert-table">
       <table>
-        <tbody>${filaN}${filaRamo}${filaPrueba}${filaSala}${filaPorc}${filaFecha}${filaEstado}</tbody>
+        <tbody>${filaN}${filaRamo}${filaPrueba}${filaSala}${filaPorc}${filaFecha}</tbody>
       </table>
     </div>
   `;
@@ -1507,13 +1499,14 @@ function renderCalendarioMes(){
   for(let i=0;i<startOffset;i++) cells += `<div class="cal-day empty"></div>`;
   for(let day=1; day<=daysInMonth; day++){
     const dayEvals = evalsByDay[day];
+    const isHoy = year===hoyReal.getFullYear() && month===hoyReal.getMonth() && day===hoyReal.getDate();
     let cls = 'cal-day';
     if(dayEvals && dayEvals.length){
       cls += esPasada(dayEvals[0].fecha) ? ' cal-day-green' : ' cal-day-orange';
+    } else if(isHoy){
+      cls += ' cal-day-today';
     }
-    const isHoy = year===hoyReal.getFullYear() && month===hoyReal.getMonth() && day===hoyReal.getDate();
-    const dot = isHoy ? '<div class="cal-day-dot"></div>' : '';
-    cells += `<div class="${cls}" data-day="${day}">${day}${dot}</div>`;
+    cells += `<div class="${cls}" data-day="${day}">${day}</div>`;
   }
 
   return `
