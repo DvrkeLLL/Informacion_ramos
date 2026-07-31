@@ -393,6 +393,10 @@
 
   /* ---------- INICIO ---------- */
   .inicio-tercio{padding:22px 20px;text-align:center;}
+  .inicio-etiqueta{
+    font-family:var(--font-display);font-size:11px;font-weight:700;text-transform:uppercase;
+    letter-spacing:0.06em;color:var(--ink-soft);margin-bottom:10px;
+  }
   .inicio-divider{height:1px;background:var(--border);margin:0 22px;}
   .inicio-ramo-nombre{font-family:var(--font-display);font-weight:800;font-size:21px;margin-bottom:8px;}
   .inicio-sala{font-family:var(--font-display);font-weight:800;font-size:42px;color:var(--accent-dark);line-height:1;margin-bottom:8px;}
@@ -517,7 +521,7 @@ const ICONS = {
   horario:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4M16 3v4"/></svg>`,
   plus:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
   promedio:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9M12 19V5M20 19v-6"/></svg>`,
-  calendario:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M8 3v4M16 3v4"/><rect x="6.5" y="12" width="3" height="3" fill="currentColor" stroke="none"/></svg>`,
+  calendario:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13l2 2 4-4"/></svg>`,
   chev:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`,
   back:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`,
   check:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`,
@@ -531,7 +535,7 @@ function renderNavOnce(){
     {id:'horario', icon:ICONS.horario, label:'Horario'},
     {id:'plus', icon:ICONS.plus, label:'Editar'},
     {id:'promedio', icon:ICONS.promedio, label:'Promedio'},
-    {id:'calendario', icon:ICONS.calendario, label:'Calendario'},
+    {id:'calendario', icon:ICONS.calendario, label:'Evaluaciones'},
   ];
   const nav = document.getElementById('bottomNav');
   nav.innerHTML = tabs.map(t=>`
@@ -1296,6 +1300,7 @@ function renderInicio(){
     </header>
 
     <div class="inicio-tercio">
+      <div class="inicio-etiqueta">Próxima clase</div>
       ${clase ? `
         <div class="inicio-ramo-nombre">${escapeHtml(clase.nombre)}</div>
         <div class="inicio-sala">${escapeHtml(clase.sala)}</div>
@@ -1306,6 +1311,7 @@ function renderInicio(){
     <div class="inicio-divider"></div>
 
     <div class="inicio-tercio">
+      <div class="inicio-etiqueta">Próxima evaluación</div>
       ${prueba ? `
         <div class="inicio-prueba-ramo">${escapeHtml(prueba.ramo)}</div>
         <div class="inicio-prueba-fecha">${formatFechaCorta(prueba.fecha)}</div>
@@ -1381,7 +1387,7 @@ function getAllEvaluacionesGlobal(){
       if(e.tipo && e.tipo.trim()!==''){
         list.push({
           ramo:r.nombre, tipo:e.tipo, sala:e.sala||'-', porcentaje:e.porcentaje||'',
-          fecha:e.fecha||'', hora:e.hora||''
+          fecha:e.fecha||'', hora:e.hora||'', nota:e.nota||'-'
         });
       }
     });
@@ -1414,15 +1420,16 @@ function tablaEvaluaciones(evals){
       <td class="num-cell">${i+1}</td>
       <td>${escapeHtml(e.ramo)}</td>
       <td>${escapeHtml(e.tipo)}</td>
-      <td>${escapeHtml(e.sala)}</td>
-      <td>${e.porcentaje ? e.porcentaje+'%' : '-'}</td>
       <td><span class="cal-fecha-cell ${esPasada(e.fecha)?'pasada':'pendiente'}" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</span></td>
+      <td>${escapeHtml(e.nota||'-')}</td>
+      <td>${e.porcentaje ? e.porcentaje+'%' : '-'}</td>
+      <td>${escapeHtml(e.sala)}</td>
     </tr>
   `).join('');
   return `
     <div class="table-wrap table-zebra">
       <table>
-        <thead><tr><th>N</th><th>Ramo</th><th>Prueba</th><th>Sala</th><th>%</th><th>Fecha</th></tr></thead>
+        <thead><tr><th>N</th><th>Ramo</th><th>Prueba</th><th>Fecha</th><th>Nota</th><th>%</th><th>Sala</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -1438,14 +1445,15 @@ function tablaEvaluacionesVertical(evals){
   const filaN       = fila('N', evals.map((e,i)=>`<td>${i+1}</td>`).join(''));
   const filaRamo     = fila('Ramo', evals.map(e=>`<td>${escapeHtml(e.ramo)}</td>`).join(''));
   const filaPrueba   = fila('Prueba', evals.map(e=>`<td>${escapeHtml(e.tipo)}</td>`).join(''));
-  const filaSala     = fila('Sala', evals.map(e=>`<td>${escapeHtml(e.sala)}</td>`).join(''));
-  const filaPorc     = fila('%', evals.map(e=>`<td>${e.porcentaje ? e.porcentaje+'%' : '-'}</td>`).join(''));
   const filaFecha    = fila('Fecha', evals.map(e=>`<td><span class="cal-fecha-cell ${esPasada(e.fecha)?'pasada':'pendiente'}" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</span></td>`).join(''));
+  const filaNota     = fila('Nota', evals.map(e=>`<td>${escapeHtml(e.nota||'-')}</td>`).join(''));
+  const filaPorc     = fila('%', evals.map(e=>`<td>${e.porcentaje ? e.porcentaje+'%' : '-'}</td>`).join(''));
+  const filaSala     = fila('Sala', evals.map(e=>`<td>${escapeHtml(e.sala)}</td>`).join(''));
 
   return `
     <div class="vert-table">
       <table>
-        <tbody>${filaN}${filaRamo}${filaPrueba}${filaSala}${filaPorc}${filaFecha}</tbody>
+        <tbody>${filaN}${filaRamo}${filaPrueba}${filaFecha}${filaNota}${filaPorc}${filaSala}</tbody>
       </table>
     </div>
   `;
@@ -1459,10 +1467,10 @@ function renderCalendarioSection(){
     state.calMonth = hoy.getMonth();
   }
   return `
-    <header class="header-center"><h1>CALENDARIO</h1></header>
+    <header class="header-center"><h1>EVALUACIONES</h1></header>
     <div class="cal-tabs">
-      <div class="cal-tab ${state.calSubview==='lista'?'active':''}" data-calsub="lista">Lista Pruebas</div>
-      <div class="cal-tab ${state.calSubview==='calendario'?'active':''}" data-calsub="calendario">Calendario Prueba</div>
+      <div class="cal-tab ${state.calSubview==='lista'?'active':''}" data-calsub="lista">Lista</div>
+      <div class="cal-tab ${state.calSubview==='calendario'?'active':''}" data-calsub="calendario">Calendario</div>
     </div>
     <div id="calContent">
       ${state.calSubview==='lista' ? tablaEvaluaciones(getAllEvaluacionesGlobal()) : renderCalendarioMes()}
