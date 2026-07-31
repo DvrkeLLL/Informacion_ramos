@@ -219,6 +219,13 @@
     appearance:none;
     color:var(--ink);
   }
+  .hora-row{display:flex;align-items:center;gap:5px;}
+  .hora-row input{flex:1;}
+  .clear-hora{
+    width:20px;height:20px;border-radius:50%;background:var(--bg);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--ink-soft);
+    cursor:pointer;flex-shrink:0;
+  }
 
   .save-bar{margin:0 18px 24px;display:flex;gap:10px;}
   .save-bar .btn-primary{flex:1;}
@@ -263,6 +270,20 @@
   .fila-excluida td, .fila-excluida input, .fila-excluida select{
     color:var(--ink-soft) !important;text-decoration:line-through;opacity:0.6;
   }
+
+  .switch-row{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;}
+  .switch-title{font-weight:700;font-family:var(--font-display);font-size:13.5px;}
+  .switch-sub{font-size:11px;color:var(--ink-soft);margin-top:2px;}
+  .switch-toggle{
+    width:46px;height:26px;border-radius:14px;background:var(--border);
+    position:relative;cursor:pointer;flex-shrink:0;transition:background .15s;
+  }
+  .switch-toggle::after{
+    content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+    background:#fff;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,0.25);
+  }
+  .switch-toggle[data-on="1"]{background:var(--accent);}
+  .switch-toggle[data-on="1"]::after{left:23px;}
 
   /* ---------- HORARIO ---------- */
   .hor-dias-header{
@@ -454,6 +475,35 @@ function resetSelState(){
 function getGroupOfRow(r, rowId){
   return (r.gruposEval||[]).find(g=> g.rowIds.includes(rowId));
 }
+let openGrupoId = null;
+
+/* Recalcula, para cada grupo con "descartarPeor" activo, cuál es actualmente
+   la peor nota (se actualiza sola si cambian las notas) y, si "repartir" está
+   activo, reparte el porcentaje total entre las filas que sí cuentan. */
+function aplicarDescartePeorNota(r){
+  (r.gruposEval||[]).forEach(grupo=>{
+    const filas = grupo.rowIds.map(id=> r.evaluaciones.find(e=>e.id===id)).filter(Boolean);
+    if(!grupo.descartarPeor){
+      filas.forEach(f=> f.excluida=false);
+    } else {
+      let peor = null, peorVal = Infinity;
+      filas.forEach(f=>{
+        const n = parseFloat(String(f.nota).replace(',', '.'));
+        const valida = !isNaN(n) && f.nota!=='' && f.nota!=='-';
+        if(valida && n < peorVal){ peorVal = n; peor = f; }
+      });
+      filas.forEach(f=> f.excluida = (peor!==null && f===peor));
+    }
+    if(grupo.repartirActivo){
+      const activas = filas.filter(f=> !f.excluida);
+      const total = parseFloat(grupo.porcentajeTotal) || 0;
+      if(activas.length>0 && total>0){
+        const cada = Math.round((total/activas.length)*100)/100;
+        activas.forEach(f=> f.porcentaje = cada);
+      }
+    }
+  });
+}
 
 const ICONS = {
   home:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>`,
@@ -598,6 +648,9 @@ function renderEvaluaciones(){
   // normaliza datos antiguos que no tenían id / gruposEval
   r.evaluaciones.forEach(row=>{ if(!row.id) row.id = uid(); if(row.excluida===undefined) row.excluida=false; });
   r.gruposEval = r.gruposEval || [];
+  aplicarDescartePeorNota(r);
+  persist();
+  const grupoAbierto = openGrupoId ? (r.gruposEval||[]).find(g=>g.id===openGrupoId) : null;
 
   const rows = r.evaluaciones.map((row,i)=>{
     const grp = getGroupOfRow(r, row.id);
@@ -633,7 +686,10 @@ function renderEvaluaciones(){
       <td><input type="number" data-field="porcentaje" value="${row.porcentaje||''}" placeholder="%" style="width:56px;"></td>
       <td class="fecha-cell">
         <input type="date" data-field="fecha" value="${row.fecha||''}">
-        <input type="time" data-field="hora" value="${row.hora||''}">
+        <div class="hora-row">
+          <input type="time" data-field="hora" value="${row.hora||''}">
+          ${row.hora ? `<div class="clear-hora" data-clearhora="${row.id}">✕</div>` : ''}
+        </div>
       </td>
       <td><input type="text" data-field="sala" value="${escapeHtml(row.sala||'')}" placeholder="-" style="width:56px;"></td>
     </tr>`;
@@ -645,7 +701,7 @@ function renderEvaluaciones(){
       <h2>Evaluaciones</h2>
     </div>
     <div class="hint">Escribe un nombre terminado en "1" (ej. "PEP 1") y las filas siguientes se sugieren automáticamente. Puedes escribir directo encima de una sugerencia.</div>
-    <div class="hint">Para agrupar notas: mantén presionado el número de una fila (vas a ver un borde verde) y arrastra el dedo por las filas que quieras incluir. Después podés seguir tocando otras filas para sumarlas, o usar el botón "Agrupar notas".</div>
+    <div class="hint">Para agrupar notas: mantén presionado el número de una fila (vas a ver un borde verde) y arrastra el dedo por las filas que quieras incluir. Después podés seguir tocando otras filas para sumarlas, o usar el botón "Agrupar notas". Tocá el número de un grupo ya creado para repartir el porcentaje o descartar la peor nota.</div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>N</th><th>Tipo de prueba</th><th>Nota</th><th>%</th><th>Fecha</th><th>Sala</th></tr></thead>
@@ -665,15 +721,33 @@ function renderEvaluaciones(){
       <button class="btn-ghost" id="cambiarN">Cambiar n</button>
       <button class="btn-primary" id="guardarEval">Guardar</button>
     </div>
-    <div id="grupoOverlay" class="hor-overlay">
+    <div id="grupoOverlay" class="hor-overlay${grupoAbierto?' show':''}">
       <div class="hor-overlay-card">
         <div class="hor-overlay-close" id="grupoClose">${ICONS.back}</div>
-        <h2 id="grupoTitulo"></h2>
-        <button class="btn-primary" id="grupoRepartirBtn">Repartir el porcentaje</button>
-        <div style="height:10px;"></div>
-        <button class="btn-primary" id="grupoMejoresBtn">Elegir las mejores notas: n</button>
-        <div style="height:10px;"></div>
-        <button class="btn-ghost" id="grupoDesagruparBtn" style="width:100%;color:var(--danger);border-color:var(--danger);">Desagrupar</button>
+        <h2>${grupoAbierto ? escapeHtml(grupoAbierto.nombre) : ''}</h2>
+
+        <div class="switch-row">
+          <div class="switch-label">
+            <div class="switch-title">Repartir porcentaje entre el grupo</div>
+            <div class="switch-sub">Reparte el total en partes iguales</div>
+          </div>
+          <div class="switch-toggle" id="toggleRepartir" data-on="${grupoAbierto && grupoAbierto.repartirActivo ? '1':'0'}"></div>
+        </div>
+        <div id="repartirInputWrap" style="${grupoAbierto && grupoAbierto.repartirActivo ? '' : 'display:none;'}margin:-6px 0 16px;">
+          <label style="font-size:12px;font-weight:700;color:var(--ink-soft);display:block;margin-bottom:6px;">Porcentaje total a repartir</label>
+          <input type="number" id="repartirInput" value="${grupoAbierto ? (grupoAbierto.porcentajeTotal||'') : ''}" placeholder="ej: 30"
+            style="width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14.5px;">
+        </div>
+
+        <div class="switch-row">
+          <div class="switch-label">
+            <div class="switch-title">Descartar peor nota</div>
+            <div class="switch-sub">Se actualiza sola si cambia cuál es la peor</div>
+          </div>
+          <div class="switch-toggle" id="toggleDescartar" data-on="${grupoAbierto && grupoAbierto.descartarPeor ? '1':'0'}"></div>
+        </div>
+
+        <button class="btn-ghost" id="grupoDesagruparBtn" style="width:100%;color:var(--danger);border-color:var(--danger);margin-top:8px;">Desagrupar</button>
       </div>
     </div>
   `;
@@ -1004,6 +1078,7 @@ function calcNotaNecesaria(evaluaciones){
 
 /* ============ VISTA: PROMEDIOS ============ */
 function renderPromedio(){
+  state.ramos.forEach(r=>{ r.gruposEval = r.gruposEval || []; aplicarDescartePeorNota(r); });
   const cards = state.ramos.map(r=>{
     const notas = (r.evaluaciones||[])
       .filter(e=> !e.excluida)
@@ -1521,12 +1596,12 @@ function attachEvents(){
       }
     };
     document.querySelectorAll('[data-go]').forEach(el=>{
-      el.onclick = ()=>{ resetSelState(); state.view = el.dataset.go; render(); };
+      el.onclick = ()=>{ resetSelState(); openGrupoId=null; state.view = el.dataset.go; render(); };
     });
   }
 
   if(state.view==='evaluaciones'){
-    document.querySelector('[data-back]').onclick = ()=>{ resetSelState(); state.view='detail'; render(); };
+    document.querySelector('[data-back]').onclick = ()=>{ resetSelState(); openGrupoId=null; state.view='detail'; render(); };
     const r = getRamo();
     if(!r.nEval){
       document.getElementById('crearEvalTabla').onclick = ()=>{
@@ -1539,6 +1614,12 @@ function attachEvents(){
       };
       return;
     }
+    document.querySelectorAll('[data-clearhora]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const row = r.evaluaciones.find(e=>e.id===btn.dataset.clearhora);
+        if(row){ row.hora=''; persist(); render(); }
+      };
+    });
     document.querySelectorAll('#evalBody tr').forEach(tr=>{
       const i = parseInt(tr.dataset.row,10);
       tr.querySelectorAll('input').forEach(input=>{
@@ -1629,10 +1710,8 @@ function attachEvents(){
         const row = r.evaluaciones[idx];
         const grp = getGroupOfRow(r, row.id);
         if(grp && !selState.active){
-          document.getElementById('grupoTitulo').textContent = grp.nombre;
-          const overlay = document.getElementById('grupoOverlay');
-          overlay.dataset.grupoId = grp.id;
-          overlay.classList.add('show');
+          openGrupoId = grp.id;
+          render();
           return;
         }
         if(selState.active && !grp){
@@ -1643,57 +1722,67 @@ function attachEvents(){
       });
     });
 
-    /* ---- Overlay de acciones del grupo ---- */
+    /* ---- Overlay de acciones del grupo (repartir % / descartar peor nota) ---- */
     const grupoOverlay = document.getElementById('grupoOverlay');
-    document.getElementById('grupoClose').onclick = ()=> grupoOverlay.classList.remove('show');
-    grupoOverlay.onclick = (e)=>{ if(e.target===grupoOverlay) grupoOverlay.classList.remove('show'); };
+    document.getElementById('grupoClose').onclick = ()=>{ openGrupoId=null; render(); };
+    grupoOverlay.onclick = (e)=>{ if(e.target===grupoOverlay){ openGrupoId=null; render(); } };
 
-    document.getElementById('grupoRepartirBtn').onclick = ()=>{
-      const grupo = (r.gruposEval||[]).find(g=>g.id===grupoOverlay.dataset.grupoId);
-      if(!grupo) return;
-      const totalStr = prompt(`¿Qué porcentaje total quieres repartir entre estas ${grupo.rowIds.length} evaluaciones?`, '');
-      const total = parseFloat((totalStr||'').replace(',','.'));
-      if(isNaN(total) || total<=0 || total>100){ toast('Ingresa un porcentaje válido'); return; }
-      const cada = Math.round((total/grupo.rowIds.length)*100)/100;
-      grupo.rowIds.forEach(id=>{
-        const row = r.evaluaciones.find(e=>e.id===id);
-        if(row){ row.porcentaje = cada; row.excluida = false; }
-      });
-      persist(); grupoOverlay.classList.remove('show'); render();
-      toast('Porcentaje repartido');
-    };
+    const grupoActivo = openGrupoId ? (r.gruposEval||[]).find(g=>g.id===openGrupoId) : null;
 
-    document.getElementById('grupoMejoresBtn').onclick = ()=>{
-      const grupo = (r.gruposEval||[]).find(g=>g.id===grupoOverlay.dataset.grupoId);
-      if(!grupo) return;
-      const total = grupo.rowIds.length;
-      const nStr = prompt(`¿Cuántas de las mejores notas quieres conservar? (de un total de ${total})`, String(Math.max(total-1,1)));
-      const n = parseInt(nStr,10);
-      if(!n || n<1 || n>=total){ toast('Ingresa un número menor a la cantidad de evaluaciones del grupo'); return; }
-      const filas = grupo.rowIds.map(id=> r.evaluaciones.find(e=>e.id===id)).filter(Boolean);
-      const sumaPorc = filas.reduce((s,f)=> s + (parseFloat(f.porcentaje)||0), 0);
-      const ordenadas = [...filas].sort((a,b)=>{
-        const na = parseFloat(String(a.nota).replace(',','.'));
-        const nb = parseFloat(String(b.nota).replace(',','.'));
-        const va = isNaN(na) ? -Infinity : na;
-        const vb = isNaN(nb) ? -Infinity : nb;
-        return vb - va;
-      });
-      const mantener = ordenadas.slice(0,n);
-      const excluir = ordenadas.slice(n);
-      const cada = Math.round((sumaPorc/n)*100)/100;
-      mantener.forEach(f=>{ f.excluida=false; f.porcentaje=cada; });
-      excluir.forEach(f=>{ f.excluida=true; });
-      persist(); grupoOverlay.classList.remove('show'); render();
-      toast('Se ajustaron las notas del grupo');
-    };
+    if(grupoActivo){
+      document.getElementById('toggleRepartir').onclick = ()=>{
+        grupoActivo.repartirActivo = !grupoActivo.repartirActivo;
+        if(grupoActivo.repartirActivo && !grupoActivo.porcentajeTotal){
+          const filas = grupoActivo.rowIds.map(id=>r.evaluaciones.find(e=>e.id===id)).filter(Boolean);
+          const suma = filas.reduce((s,f)=>s+(parseFloat(f.porcentaje)||0),0);
+          grupoActivo.porcentajeTotal = suma>0 ? suma : '';
+        }
+        aplicarDescartePeorNota(r);
+        persist(); render();
+      };
 
-    document.getElementById('grupoDesagruparBtn').onclick = ()=>{
-      const grupoId = grupoOverlay.dataset.grupoId;
-      r.gruposEval = (r.gruposEval||[]).filter(g=>g.id!==grupoId);
-      persist(); grupoOverlay.classList.remove('show'); render();
-      toast('Grupo eliminado');
-    };
+      document.getElementById('toggleDescartar').onclick = ()=>{
+        grupoActivo.descartarPeor = !grupoActivo.descartarPeor;
+        if(grupoActivo.descartarPeor && !grupoActivo.repartirActivo){
+          grupoActivo.repartirActivo = true;
+          if(!grupoActivo.porcentajeTotal){
+            const filas = grupoActivo.rowIds.map(id=>r.evaluaciones.find(e=>e.id===id)).filter(Boolean);
+            const suma = filas.reduce((s,f)=>s+(parseFloat(f.porcentaje)||0),0);
+            grupoActivo.porcentajeTotal = suma>0 ? suma : '';
+          }
+        }
+        aplicarDescartePeorNota(r);
+        persist(); render();
+      };
+
+      const repartirInput = document.getElementById('repartirInput');
+      if(repartirInput){
+        repartirInput.addEventListener('input', ()=>{
+          grupoActivo.porcentajeTotal = repartirInput.value;
+          aplicarDescartePeorNota(r);
+          persist();
+          // actualiza solo los inputs de % visibles en la tabla, sin perder el foco de este input
+          grupoActivo.rowIds.forEach(id=>{
+            const fila = r.evaluaciones.find(e=>e.id===id);
+            const idxFila = r.evaluaciones.findIndex(e=>e.id===id);
+            if(fila && idxFila>-1){
+              const inputPorc = document.querySelector(`#evalBody tr[data-row="${idxFila}"] input[data-field="porcentaje"]`);
+              if(inputPorc) inputPorc.value = fila.porcentaje;
+            }
+          });
+        });
+      }
+
+      document.getElementById('grupoDesagruparBtn').onclick = ()=>{
+        r.gruposEval = (r.gruposEval||[]).filter(g=>g.id!==grupoActivo.id);
+        grupoActivo.rowIds.forEach(id=>{
+          const fila = r.evaluaciones.find(e=>e.id===id);
+          if(fila) fila.excluida = false;
+        });
+        persist(); openGrupoId=null; render();
+        toast('Grupo eliminado');
+      };
+    }
   }
 
   if(state.view==='semana'){
