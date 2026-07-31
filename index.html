@@ -202,7 +202,7 @@
   }
   td input:focus, td select:focus{border-color:var(--accent);background:#fff;outline:none;}
   td input.suggested{color:var(--ink-soft);font-style:italic;}
-  .num-cell{color:var(--ink-soft);font-weight:700;text-align:center;width:34px;}
+  .num-cell{color:var(--ink-soft);font-weight:700;text-align:center;width:34px;touch-action:none;user-select:none;-webkit-user-select:none;}
   .fecha-cell{display:flex;flex-direction:column;gap:5px;min-width:126px;padding:6px 4px;}
   .fecha-cell input{
     padding:7px 6px;font-size:12px;
@@ -227,6 +227,35 @@
   }
   .toast.show{opacity:1;}
   .hint{font-size:11px;color:var(--ink-soft);margin:0 18px 14px;line-height:1.5;}
+
+  /* ---------- AGRUPAR NOTAS ---------- */
+  .num-cell-group{background:rgba(47,110,78,0.1);cursor:pointer;font-weight:800;}
+  .num-cell-selectable{cursor:pointer;}
+  .num-cell-pending{background:rgba(176,105,42,0.14);font-weight:800;}
+
+  tr.grupo-conf td{background:rgba(47,110,78,0.06);border-top:2px solid transparent;border-bottom:2px solid transparent;}
+  tr.grupo-conf-top td{border-top-color:var(--accent);}
+  tr.grupo-conf-bottom td{border-bottom-color:var(--accent);}
+  tr.grupo-conf td:first-child{border-left:2px solid var(--accent);}
+  tr.grupo-conf td:last-child{border-right:2px solid var(--accent);}
+  tr.grupo-conf-top td:first-child{border-top-left-radius:10px;}
+  tr.grupo-conf-top td:last-child{border-top-right-radius:10px;}
+  tr.grupo-conf-bottom td:first-child{border-bottom-left-radius:10px;}
+  tr.grupo-conf-bottom td:last-child{border-bottom-right-radius:10px;}
+
+  tr.grupo-pend td{background:rgba(176,105,42,0.07);border-top:2px dashed transparent;border-bottom:2px dashed transparent;}
+  tr.grupo-pend-top td{border-top-color:var(--pastel-orange-ink);}
+  tr.grupo-pend-bottom td{border-bottom-color:var(--pastel-orange-ink);}
+  tr.grupo-pend td:first-child{border-left:2px dashed var(--pastel-orange-ink);}
+  tr.grupo-pend td:last-child{border-right:2px dashed var(--pastel-orange-ink);}
+
+  .group-bar{margin:0 18px 14px;display:flex;gap:10px;}
+  .group-bar .btn-primary{flex:1;}
+  .group-bar button:disabled{opacity:0.45;pointer-events:none;}
+
+  .fila-excluida td, .fila-excluida input, .fila-excluida select{
+    color:var(--ink-soft) !important;text-decoration:line-through;opacity:0.6;
+  }
 
   /* ---------- HORARIO ---------- */
   .hor-dias-header{
@@ -295,6 +324,7 @@
   .hor-line{font-size:13.5px;margin-bottom:8px;color:var(--ink);}
   .hor-line b{color:var(--ink-soft);font-family:var(--font-display);font-weight:700;font-size:12px;}
   #hoHorario{font-weight:700;font-family:var(--font-display);color:var(--accent-dark);margin-bottom:14px;}
+  .linea-excluida{text-decoration:line-through;color:var(--ink-soft) !important;opacity:0.65;}
 
   /* ---------- CALENDARIO ---------- */
   .cal-tabs{display:flex;gap:10px;padding:0 18px;margin-bottom:14px;}
@@ -406,6 +436,17 @@ function toast(msg){
   setTimeout(()=>t.classList.remove('show'),1600);
 }
 function uid(){ return 'r'+Math.random().toString(36).slice(2,9); }
+
+/* ============ AGRUPAR NOTAS (selección manual con mantener presionado + arrastrar) ============ */
+let selState = { active:false, pending:new Set(), anchorIdx:null, longPressTimer:null, isDraggingLongPress:false };
+
+function resetSelState(){
+  clearTimeout(selState.longPressTimer);
+  selState = { active:false, pending:new Set(), anchorIdx:null, longPressTimer:null, isDraggingLongPress:false };
+}
+function getGroupOfRow(r, rowId){
+  return (r.gruposEval||[]).find(g=> g.rowIds.includes(rowId));
+}
 
 const ICONS = {
   home:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>`,
@@ -547,9 +588,39 @@ function renderEvaluaciones(){
       </div>
     `;
   }
-  const rows = r.evaluaciones.map((row,i)=>`
-    <tr data-row="${i}">
-      <td class="num-cell">${i+1}</td>
+  // normaliza datos antiguos que no tenían id / gruposEval
+  r.evaluaciones.forEach(row=>{ if(!row.id) row.id = uid(); if(row.excluida===undefined) row.excluida=false; });
+  r.gruposEval = r.gruposEval || [];
+
+  const rows = r.evaluaciones.map((row,i)=>{
+    const grp = getGroupOfRow(r, row.id);
+    const isPending = selState.active && selState.pending.has(row.id);
+    const prevRow = r.evaluaciones[i-1];
+    const nextRow = r.evaluaciones[i+1];
+
+    let trClasses = [];
+    if(row.excluida) trClasses.push('fila-excluida');
+    if(grp){
+      trClasses.push('grupo-conf');
+      const prevSame = prevRow && getGroupOfRow(r, prevRow.id)===grp;
+      const nextSame = nextRow && getGroupOfRow(r, nextRow.id)===grp;
+      if(!prevSame) trClasses.push('grupo-conf-top');
+      if(!nextSame) trClasses.push('grupo-conf-bottom');
+    } else if(isPending){
+      trClasses.push('grupo-pend');
+      const prevPend = prevRow && selState.pending.has(prevRow.id);
+      const nextPend = nextRow && selState.pending.has(nextRow.id);
+      if(!prevPend) trClasses.push('grupo-pend-top');
+      if(!nextPend) trClasses.push('grupo-pend-bottom');
+    }
+
+    let numCellClass = 'num-cell';
+    if(grp) numCellClass += ' num-cell-group';
+    else if(selState.active) numCellClass += ' num-cell-selectable' + (isPending ? ' num-cell-pending' : '');
+
+    return `
+    <tr data-row="${i}" class="${trClasses.join(' ')}">
+      <td class="${numCellClass}" data-selrow="${row.id}" data-idx="${i}">${i+1}</td>
       <td><input type="text" data-field="tipo" class="${row.tipoSuggested?'suggested':''}" value="${escapeHtml(row.tipo||'')}" placeholder="ej: PEP 1"></td>
       <td><input type="text" data-field="nota" value="${escapeHtml(row.nota||'')}" placeholder="-" style="width:56px;"></td>
       <td><input type="number" data-field="porcentaje" value="${row.porcentaje||''}" placeholder="%" style="width:56px;"></td>
@@ -558,8 +629,8 @@ function renderEvaluaciones(){
         <input type="time" data-field="hora" value="${row.hora||''}">
       </td>
       <td><input type="text" data-field="sala" value="${escapeHtml(row.sala||'')}" placeholder="-" style="width:56px;"></td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 
   return `
     <div class="topbar">
@@ -567,16 +638,36 @@ function renderEvaluaciones(){
       <h2>Evaluaciones</h2>
     </div>
     <div class="hint">Escribe un nombre terminado en "1" (ej. "PEP 1") y las filas siguientes se sugieren automáticamente. Puedes escribir directo encima de una sugerencia.</div>
+    <div class="hint">Para agrupar notas: mantén presionado el número de una fila (vas a ver un borde verde) y arrastra el dedo por las filas que quieras incluir. Después podés seguir tocando otras filas para sumarlas, o usar el botón "Agrupar notas".</div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>N</th><th>Tipo de prueba</th><th>Nota</th><th>%</th><th>Fecha</th><th>Sala</th></tr></thead>
         <tbody id="evalBody">${rows}</tbody>
       </table>
     </div>
+    <div class="group-bar">
+      ${selState.active ? `
+        <button class="btn-ghost" id="cancelarAgrupar">Cancelar</button>
+        <button class="btn-primary" id="confirmarAgrupar" ${selState.pending.size<2?'disabled':''}>Agrupar seleccionadas (${selState.pending.size})</button>
+      ` : `
+        <button class="btn-ghost" id="iniciarAgrupar" style="width:100%;">Agrupar notas</button>
+      `}
+    </div>
     <div id="evalWarn"></div>
     <div class="save-bar">
       <button class="btn-ghost" id="cambiarN">Cambiar n</button>
       <button class="btn-primary" id="guardarEval">Guardar</button>
+    </div>
+    <div id="grupoOverlay" class="hor-overlay">
+      <div class="hor-overlay-card">
+        <div class="hor-overlay-close" id="grupoClose">${ICONS.back}</div>
+        <h2 id="grupoTitulo"></h2>
+        <button class="btn-primary" id="grupoRepartirBtn">Repartir el porcentaje</button>
+        <div style="height:10px;"></div>
+        <button class="btn-primary" id="grupoMejoresBtn">Elegir las mejores notas: n</button>
+        <div style="height:10px;"></div>
+        <button class="btn-ghost" id="grupoDesagruparBtn" style="width:100%;color:var(--danger);border-color:var(--danger);">Desagrupar</button>
+      </div>
     </div>
   `;
 }
@@ -885,6 +976,7 @@ function calcNotaNecesaria(evaluaciones){
   const TARGET = 3.95;
   let sumGraded = 0, weightGraded = 0, weightRemaining = 0;
   evaluaciones.forEach(e=>{
+    if(e.excluida) return;
     const w = (parseFloat(e.porcentaje)||0) / 100;
     const notaNum = parseFloat(String(e.nota).replace(',', '.'));
     const tieneNota = !isNaN(notaNum) && e.nota !== '' && e.nota !== '-';
@@ -907,6 +999,7 @@ function calcNotaNecesaria(evaluaciones){
 function renderPromedio(){
   const cards = state.ramos.map(r=>{
     const notas = (r.evaluaciones||[])
+      .filter(e=> !e.excluida)
       .map(e=> parseFloat(String(e.nota).replace(',', '.')))
       .filter(n=> !isNaN(n));
     const simple = notas.length ? (notas.reduce((a,b)=>a+b,0) / notas.length) : null;
@@ -944,9 +1037,10 @@ function attachPromedioEvents(){
         const w = parseFloat(e.porcentaje) || 0;
         const notaNum = parseFloat(String(e.nota).replace(',', '.'));
         const notaValida = !isNaN(notaNum) && e.nota!=='' && e.nota!=='-';
-        if(notaValida){ sumW += w/100; sumWN += notaNum * (w/100); }
+        if(notaValida && !e.excluida){ sumW += w/100; sumWN += notaNum * (w/100); }
         const notaTxt = notaValida ? formatNota(notaNum) : '-';
-        return `<div class="hor-line">${escapeHtml(e.tipo || '-')}(${w}%): ${notaTxt}</div>`;
+        const claseExcl = e.excluida ? ' class="linea-excluida"' : '';
+        return `<div class="hor-line"${claseExcl}>${escapeHtml(e.tipo || '-')}(${w}%): ${notaTxt}</div>`;
       }).join('');
 
       const pondActual = sumW>0 ? (sumWN/sumW) : null;
@@ -1420,19 +1514,20 @@ function attachEvents(){
       }
     };
     document.querySelectorAll('[data-go]').forEach(el=>{
-      el.onclick = ()=>{ state.view = el.dataset.go; render(); };
+      el.onclick = ()=>{ resetSelState(); state.view = el.dataset.go; render(); };
     });
   }
 
   if(state.view==='evaluaciones'){
-    document.querySelector('[data-back]').onclick = ()=>{ state.view='detail'; render(); };
+    document.querySelector('[data-back]').onclick = ()=>{ resetSelState(); state.view='detail'; render(); };
     const r = getRamo();
     if(!r.nEval){
       document.getElementById('crearEvalTabla').onclick = ()=>{
         const n = parseInt(document.getElementById('nEvalInput').value,10);
         if(!n || n<1){ toast('Ingresa un número válido'); return; }
         r.nEval = n;
-        r.evaluaciones = Array.from({length:n}, ()=>({tipo:'',nota:'',porcentaje:'',fecha:'',hora:'',sala:''}));
+        r.evaluaciones = Array.from({length:n}, ()=>({id:uid(), tipo:'',nota:'',porcentaje:'',fecha:'',hora:'',sala:'',excluida:false}));
+        r.gruposEval = r.gruposEval || [];
         persist(); render();
       };
       return;
@@ -1467,18 +1562,130 @@ function attachEvents(){
     document.getElementById('cambiarN').onclick = ()=>{
       const n = parseInt(prompt('Nueva cantidad de evaluaciones:', r.nEval),10);
       if(!n || n<1) return;
-      const nuevo = Array.from({length:n}, (_,i)=> r.evaluaciones[i] || {tipo:'',nota:'',porcentaje:'',fecha:'',hora:'',sala:''});
+      const nuevo = Array.from({length:n}, (_,i)=> r.evaluaciones[i] || {id:uid(), tipo:'',nota:'',porcentaje:'',fecha:'',hora:'',sala:'',excluida:false});
       r.nEval = n; r.evaluaciones = nuevo; persist(); render();
     };
     document.getElementById('guardarEval').onclick = ()=>{
-      const suma = r.evaluaciones.reduce((s,row)=> s + (parseFloat(row.porcentaje)||0), 0);
+      const suma = r.evaluaciones.reduce((s,row)=> row.excluida ? s : s + (parseFloat(row.porcentaje)||0), 0);
       const warnDiv = document.getElementById('evalWarn');
       if(Math.round(suma) !== 100){
-        warnDiv.innerHTML = `<div class="warn">Los porcentajes suman ${suma}%. Deben sumar 100% antes de guardar.</div>`;
+        warnDiv.innerHTML = `<div class="warn">Los porcentajes (sin contar notas excluidas) suman ${suma}%. Deben sumar 100% antes de guardar.</div>`;
       } else {
         warnDiv.innerHTML = '';
         persist(); toast('Evaluaciones guardadas'); state.view='detail'; render();
       }
+    };
+
+    /* ---- Agrupar notas: botones de control ---- */
+    if(document.getElementById('iniciarAgrupar')){
+      document.getElementById('iniciarAgrupar').onclick = ()=>{
+        selState.active = true; selState.pending = new Set(); selState.anchorIdx = null;
+        render();
+      };
+    }
+    if(document.getElementById('cancelarAgrupar')){
+      document.getElementById('cancelarAgrupar').onclick = ()=>{ resetSelState(); render(); };
+    }
+    if(document.getElementById('confirmarAgrupar')){
+      document.getElementById('confirmarAgrupar').onclick = ()=>{
+        if(selState.pending.size<2) return;
+        r.gruposEval = r.gruposEval || [];
+        const nextNum = r.gruposEval.length+1;
+        r.gruposEval.push({id:uid(), nombre:'Grupo '+nextNum, rowIds:Array.from(selState.pending)});
+        persist(); resetSelState(); render();
+        toast('Grupo creado');
+      };
+    }
+
+    /* ---- Agrupar notas: interacción sobre el número de fila (tap / long-press) ---- */
+    document.querySelectorAll('[data-selrow]').forEach(cell=>{
+      const rowId = cell.dataset.selrow;
+      const idx = parseInt(cell.dataset.idx,10);
+
+      cell.addEventListener('pointerdown', ()=>{
+        const row = r.evaluaciones[idx];
+        if(getGroupOfRow(r,row.id)) return;
+        selState.longPressTimer = setTimeout(()=>{
+          if(navigator.vibrate) navigator.vibrate(30);
+          selState.active = true;
+          selState.anchorIdx = idx;
+          selState.pending.add(rowId);
+          selState.isDraggingLongPress = true;
+          render();
+        }, 450);
+      });
+      cell.addEventListener('pointerup', ()=>{ clearTimeout(selState.longPressTimer); });
+      cell.addEventListener('pointercancel', ()=>{ clearTimeout(selState.longPressTimer); });
+      cell.addEventListener('pointermove', ()=>{ clearTimeout(selState.longPressTimer); });
+
+      cell.addEventListener('click', ()=>{
+        const row = r.evaluaciones[idx];
+        const grp = getGroupOfRow(r, row.id);
+        if(grp && !selState.active){
+          document.getElementById('grupoTitulo').textContent = grp.nombre;
+          const overlay = document.getElementById('grupoOverlay');
+          overlay.dataset.grupoId = grp.id;
+          overlay.classList.add('show');
+          return;
+        }
+        if(selState.active && !grp){
+          if(selState.pending.has(rowId)) selState.pending.delete(rowId);
+          else selState.pending.add(rowId);
+          render();
+        }
+      });
+    });
+
+    /* ---- Overlay de acciones del grupo ---- */
+    const grupoOverlay = document.getElementById('grupoOverlay');
+    document.getElementById('grupoClose').onclick = ()=> grupoOverlay.classList.remove('show');
+    grupoOverlay.onclick = (e)=>{ if(e.target===grupoOverlay) grupoOverlay.classList.remove('show'); };
+
+    document.getElementById('grupoRepartirBtn').onclick = ()=>{
+      const grupo = (r.gruposEval||[]).find(g=>g.id===grupoOverlay.dataset.grupoId);
+      if(!grupo) return;
+      const totalStr = prompt(`¿Qué porcentaje total quieres repartir entre estas ${grupo.rowIds.length} evaluaciones?`, '');
+      const total = parseFloat((totalStr||'').replace(',','.'));
+      if(isNaN(total) || total<=0 || total>100){ toast('Ingresa un porcentaje válido'); return; }
+      const cada = Math.round((total/grupo.rowIds.length)*100)/100;
+      grupo.rowIds.forEach(id=>{
+        const row = r.evaluaciones.find(e=>e.id===id);
+        if(row){ row.porcentaje = cada; row.excluida = false; }
+      });
+      persist(); grupoOverlay.classList.remove('show'); render();
+      toast('Porcentaje repartido');
+    };
+
+    document.getElementById('grupoMejoresBtn').onclick = ()=>{
+      const grupo = (r.gruposEval||[]).find(g=>g.id===grupoOverlay.dataset.grupoId);
+      if(!grupo) return;
+      const total = grupo.rowIds.length;
+      const nStr = prompt(`¿Cuántas de las mejores notas quieres conservar? (de un total de ${total})`, String(Math.max(total-1,1)));
+      const n = parseInt(nStr,10);
+      if(!n || n<1 || n>=total){ toast('Ingresa un número menor a la cantidad de evaluaciones del grupo'); return; }
+      const filas = grupo.rowIds.map(id=> r.evaluaciones.find(e=>e.id===id)).filter(Boolean);
+      const sumaPorc = filas.reduce((s,f)=> s + (parseFloat(f.porcentaje)||0), 0);
+      const ordenadas = [...filas].sort((a,b)=>{
+        const na = parseFloat(String(a.nota).replace(',','.'));
+        const nb = parseFloat(String(b.nota).replace(',','.'));
+        const va = isNaN(na) ? -Infinity : na;
+        const vb = isNaN(nb) ? -Infinity : nb;
+        return vb - va;
+      });
+      const mantener = ordenadas.slice(0,n);
+      const excluir = ordenadas.slice(n);
+      const cada = Math.round((sumaPorc/n)*100)/100;
+      mantener.forEach(f=>{ f.excluida=false; f.porcentaje=cada; });
+      excluir.forEach(f=>{ f.excluida=true; });
+      persist(); grupoOverlay.classList.remove('show'); render();
+      toast('Se ajustaron las notas del grupo');
+    };
+
+    document.getElementById('grupoDesagruparBtn').onclick = ()=>{
+      const grupoId = grupoOverlay.dataset.grupoId;
+      r.gruposEval = (r.gruposEval||[]).filter(g=>g.id!==grupoId);
+      persist(); grupoOverlay.classList.remove('show'); render();
+      toast('Grupo eliminado');
     };
   }
 
@@ -1544,6 +1751,30 @@ function attachEvents(){
     };
   }
 }
+
+/* ---- Agrupar notas: arrastre global mientras se mantiene presionado ---- */
+document.addEventListener('pointermove', (e)=>{
+  if(!selState.isDraggingLongPress || selState.anchorIdx===null) return;
+  if(state.section!=='editar' || state.view!=='evaluaciones') return;
+  const r = getRamo();
+  if(!r) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const cell = el && el.closest('[data-selrow]');
+  if(!cell) return;
+  const idx = parseInt(cell.dataset.idx,10);
+  const lo = Math.min(selState.anchorIdx, idx);
+  const hi = Math.max(selState.anchorIdx, idx);
+  let cambio = false;
+  for(let k=lo;k<=hi;k++){
+    const row = r.evaluaciones[k];
+    if(row && !getGroupOfRow(r,row.id) && !selState.pending.has(row.id)){
+      selState.pending.add(row.id);
+      cambio = true;
+    }
+  }
+  if(cambio) render();
+});
+document.addEventListener('pointerup', ()=>{ selState.isDraggingLongPress = false; });
 
 renderNavOnce();
 render();
