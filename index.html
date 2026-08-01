@@ -392,7 +392,8 @@
   .cal-day.static{cursor:default;}
 
   /* ---------- INICIO ---------- */
-  .inicio-tercio{padding:22px 20px;text-align:center;}
+  .inicio-tercio{padding:22px 20px;text-align:center;touch-action:pan-y;user-select:none;-webkit-user-select:none;}
+  .inicio-dots{font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft);opacity:0.7;}
   .inicio-etiqueta{
     font-family:var(--font-display);font-size:11px;font-weight:700;text-transform:uppercase;
     letter-spacing:0.06em;color:var(--ink-soft);margin-bottom:10px;
@@ -457,6 +458,8 @@ let state = {
   view:'list',
   ramoId:null,
   calSubview:'lista',    // lista | calendario
+  inicioClaseIdx:0,
+  inicioPruebaIdx:0,
   calYear:null,
   calMonth:null,
   ramos: JSON.parse(localStorage.getItem('ramos_v1') || '[]')
@@ -547,7 +550,7 @@ function renderNavOnce(){
   nav.querySelectorAll('[data-nav]').forEach(el=>{
     el.onclick = ()=>{
       if(el.dataset.nav==='plus'){ state.section='editar'; state.view='list'; render(); }
-      else if(el.dataset.nav==='home'){ state.section='inicio'; render(); }
+      else if(el.dataset.nav==='home'){ state.section='inicio'; state.inicioClaseIdx=0; state.inicioPruebaIdx=0; render(); }
       else if(el.dataset.nav==='horario'){ state.section='horario'; render(); }
       else if(el.dataset.nav==='promedio'){ state.section='promedio'; render(); }
       else if(el.dataset.nav==='calendario'){ state.section='calendario'; state.calSubview='lista'; render(); }
@@ -1175,19 +1178,10 @@ function nombreDiaOffset(offsetDays){
   const map = {1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes'};
   return map[d.getDay()] || null;
 }
-function buscarSiguienteSesion(idxActual, sesionesHoy){
-  if(idxActual+1 < sesionesHoy.length) return sesionesHoy[idxActual+1];
-  for(let off=1; off<=7; off++){
-    const dia = nombreDiaOffset(off);
-    if(!dia) continue;
-    const sesiones = getSesionesDia(dia);
-    if(sesiones.length) return sesiones[0];
-  }
-  return null;
-}
-function buscarClaseCercana(){
+function getListaClasesProximas(maxItems=12){
   const ahora = new Date();
   const nowMin = ahora.getHours()*60 + ahora.getMinutes();
+  let resultado = [];
 
   const diaHoy = nombreDiaOffset(0);
   if(diaHoy){
@@ -1198,36 +1192,33 @@ function buscarClaseCercana(){
       if(!info) continue;
       if(nowMin>=info.start && nowMin<=info.end){
         const elapsed = nowMin - info.start;
-        if(elapsed>=40){
-          const sig = buscarSiguienteSesion(i, sesiones);
-          if(sig) return {nombre:sig.ramo, sala:sig.sala, bloque:sig.bloque, dia:sig.dia};
+        if(elapsed<40){
+          resultado.push({nombre:s.ramo, sala:s.sala, bloque:s.bloque, dia:diaHoy});
         }
-        return {nombre:s.ramo, sala:s.sala, bloque:s.bloque, dia:diaHoy};
+        // si elapsed>=40 se salta esta sesión, la siguiente ya pasa a ser la "actual"
+      } else if(nowMin < info.start){
+        resultado.push({nombre:s.ramo, sala:s.sala, bloque:s.bloque, dia:diaHoy});
       }
-    }
-    for(const s of sesiones){
-      const info = BLOQUES_MIN.find(b=>b.n===s.bloque);
-      if(info && nowMin < info.start){
-        return {nombre:s.ramo, sala:s.sala, bloque:s.bloque, dia:diaHoy};
-      }
+      if(resultado.length>=maxItems) return resultado;
     }
   }
-  for(let off=1; off<=7; off++){
+  for(let off=1; off<=14 && resultado.length<maxItems; off++){
     const dia = nombreDiaOffset(off);
     if(!dia) continue;
     const sesiones = getSesionesDia(dia);
-    if(sesiones.length){
-      const s = sesiones[0];
-      return {nombre:s.ramo, sala:s.sala, bloque:s.bloque, dia:dia};
+    for(const s of sesiones){
+      resultado.push({nombre:s.ramo, sala:s.sala, bloque:s.bloque, dia:dia});
+      if(resultado.length>=maxItems) break;
     }
   }
-  return null;
+  return resultado;
 }
 
-/* ============ LÓGICA: próxima prueba ============ */
-function buscarPruebaProxima(){
+/* ============ LÓGICA: lista de próximas pruebas (para el swipe) ============ */
+function getListaPruebasProximas(maxItems=12){
   const ahora = new Date();
   const evals = getAllEvaluacionesGlobal().filter(e=>e.fecha);
+  let resultado = [];
   for(const e of evals){
     let limite;
     if(e.hora){
@@ -1237,9 +1228,12 @@ function buscarPruebaProxima(){
     } else {
       limite = new Date(e.fecha+'T20:00:00');
     }
-    if(ahora <= limite) return e;
+    if(ahora <= limite){
+      resultado.push(e);
+      if(resultado.length>=maxItems) break;
+    }
   }
-  return null;
+  return resultado;
 }
 
 /* ============ VISTA: INICIO ============ */
@@ -1289,8 +1283,12 @@ function renderMiniCalendario(){
 }
 
 function renderInicio(){
-  const clase = buscarClaseCercana();
-  const prueba = buscarPruebaProxima();
+  const listaClases = getListaClasesProximas();
+  const listaPruebas = getListaPruebasProximas();
+  if(state.inicioClaseIdx > Math.max(listaClases.length-1,0)) state.inicioClaseIdx = 0;
+  if(state.inicioPruebaIdx > Math.max(listaPruebas.length-1,0)) state.inicioPruebaIdx = 0;
+  const clase = listaClases[state.inicioClaseIdx] || null;
+  const prueba = listaPruebas[state.inicioPruebaIdx] || null;
   const bloqueLabel = clase ? `${DIA_INICIAL[clase.dia]}${clase.bloque}` : '';
 
   return `
@@ -1299,8 +1297,8 @@ function renderInicio(){
       <h1>INICIO</h1>
     </header>
 
-    <div class="inicio-tercio">
-      <div class="inicio-etiqueta">Próxima clase</div>
+    <div class="inicio-tercio" id="tercioClase">
+      <div class="inicio-etiqueta">Próxima clase${listaClases.length>1?` <span class="inicio-dots">${state.inicioClaseIdx+1}/${listaClases.length}</span>`:''}</div>
       ${clase ? `
         <div class="inicio-ramo-nombre">${escapeHtml(clase.nombre)}</div>
         <div class="inicio-sala">${escapeHtml(clase.sala)}</div>
@@ -1310,8 +1308,8 @@ function renderInicio(){
 
     <div class="inicio-divider"></div>
 
-    <div class="inicio-tercio">
-      <div class="inicio-etiqueta">Próxima evaluación</div>
+    <div class="inicio-tercio" id="tercioPrueba">
+      <div class="inicio-etiqueta">Próxima evaluación${listaPruebas.length>1?` <span class="inicio-dots">${state.inicioPruebaIdx+1}/${listaPruebas.length}</span>`:''}</div>
       ${prueba ? `
         <div class="inicio-prueba-ramo">${escapeHtml(prueba.ramo)}</div>
         <div class="inicio-prueba-fecha">${formatFechaCorta(prueba.fecha)}</div>
@@ -1339,7 +1337,28 @@ function renderInicio(){
   `;
 }
 
+function attachSwipeTercio(el, tipo){
+  if(!el) return;
+  let startX=0, startY=0;
+  el.addEventListener('pointerdown', e=>{ startX=e.clientX; startY=e.clientY; });
+  el.addEventListener('pointerup', e=>{
+    const dx = e.clientX-startX, dy = e.clientY-startY;
+    if(Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+    const dir = dx<0 ? 1 : -1;
+    if(tipo==='clase'){
+      const total = getListaClasesProximas().length;
+      state.inicioClaseIdx = Math.min(Math.max(state.inicioClaseIdx+dir, 0), Math.max(total-1,0));
+    } else {
+      const total = getListaPruebasProximas().length;
+      state.inicioPruebaIdx = Math.min(Math.max(state.inicioPruebaIdx+dir, 0), Math.max(total-1,0));
+    }
+    render();
+  });
+}
+
 function attachInicioEvents(){
+  attachSwipeTercio(document.getElementById('tercioClase'), 'clase');
+  attachSwipeTercio(document.getElementById('tercioPrueba'), 'prueba');
   const gearBtn = document.getElementById('gearBtn');
   const overlay = document.getElementById('settingsOverlay');
   gearBtn.onclick = ()=> overlay.classList.add('show');
