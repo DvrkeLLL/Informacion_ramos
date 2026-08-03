@@ -1136,7 +1136,8 @@ function attachPromedioEvents(){
         if(notaValida && !e.excluida){ sumW += w/100; sumWN += notaNum * (w/100); }
         const notaTxt = notaValida ? formatNota(notaNum) : '-';
         const claseExcl = e.excluida ? ' class="linea-excluida"' : '';
-        return `<div class="hor-line"${claseExcl}>${escapeHtml(e.tipo || '-')}(${w}%): ${notaTxt}</div>`;
+        const wTxt = e.excluida ? 0 : w;
+        return `<div class="hor-line"${claseExcl}>${escapeHtml(e.tipo || '-')}(${wTxt}%): ${notaTxt}</div>`;
       }).join('');
 
       const pondActual = sumW>0 ? (sumWN/sumW) : null;
