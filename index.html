@@ -622,14 +622,14 @@ function renderDetail(){
       <div class="section-btn" data-go="evaluaciones">
         <div>
           <div class="label">Evaluaciones</div>
-          <div class="status ${r.nEval?'ok':''}">${r.nEval? r.nEval+' evaluaciones configuradas' : 'Sin configurar — toca para definir cantidad'}</div>
+          <div class="status ${r.nEval?'ok':''}">${r.nEval? r.nEval+' evaluaciones configuradas' : 'Sin configurar — toca para agregarlas'}</div>
         </div>
         <div class="chev">${ICONS.chev}</div>
       </div>
       <div class="section-btn" data-go="semana">
         <div>
-          <div class="label">Cantidad a la semana</div>
-          <div class="status ${r.nSemana?'ok':''}">${r.nSemana? r.nSemana+' bloques a la semana' : 'Sin configurar — toca para definir cantidad'}</div>
+          <div class="label">Horario</div>
+          <div class="status ${r.nSemana?'ok':''}">${r.nSemana? r.nSemana+' bloques a la semana' : 'Sin configurar — toca para agregarlo'}</div>
         </div>
         <div class="chev">${ICONS.chev}</div>
       </div>
@@ -653,7 +653,7 @@ function renderEvaluaciones(){
         <h2>Evaluaciones</h2>
       </div>
       <div class="inline-form">
-        <label>¿Cuántas evaluaciones tiene este ramo? (n)</label>
+        <label>¿Cuántas evaluaciones tiene este ramo?</label>
         <input type="number" min="1" id="nEvalInput" placeholder="ej: 4">
         <button class="btn-primary" id="crearEvalTabla">Crear tabla</button>
       </div>
@@ -732,7 +732,7 @@ function renderEvaluaciones(){
     </div>
     <div id="evalWarn"></div>
     <div class="save-bar">
-      <button class="btn-ghost" id="cambiarN">Cambiar n</button>
+      <button class="btn-ghost" id="cambiarN">Cambiar cantidad</button>
       <button class="btn-primary" id="guardarEval">Guardar</button>
     </div>
     <div id="grupoOverlay" class="hor-overlay${grupoAbierto?' show':''}">
@@ -773,10 +773,10 @@ function renderSemana(){
     return `
       <div class="topbar">
         <div class="back" data-back="detail">${ICONS.back}</div>
-        <h2>Cantidad a la semana</h2>
+        <h2>Horario</h2>
       </div>
       <div class="inline-form">
-        <label>Cantidad a la semana (n)</label>
+        <label>¿Cuántas veces a la semana tienes este ramo?</label>
         <input type="number" min="1" id="nSemInput" placeholder="ej: 3">
         <button class="btn-primary" id="crearSemTabla">Crear tabla</button>
       </div>
@@ -811,7 +811,7 @@ function renderSemana(){
   return `
     <div class="topbar">
       <div class="back" data-back="detail">${ICONS.back}</div>
-      <h2>Cantidad a la semana</h2>
+      <h2>Horario</h2>
     </div>
     <div class="hint">Bloque siempre trae un valor por defecto (revisa la tabla de horarios si necesitas ver el rango). Escribe la parte de texto de la ubicación (ej. "ED") y se sugiere en las filas vacías; el número lo completas tú en cada fila.</div>
     <div class="table-wrap">
@@ -821,7 +821,7 @@ function renderSemana(){
       </table>
     </div>
     <div class="save-bar">
-      <button class="btn-ghost" id="cambiarNSem">Cambiar n</button>
+      <button class="btn-ghost" id="cambiarNSem">Cambiar cantidad</button>
       <button class="btn-primary" id="guardarSem">Guardar</button>
     </div>
   `;
