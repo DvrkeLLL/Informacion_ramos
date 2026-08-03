@@ -975,6 +975,20 @@ function attachSwipeToDelete(){
   });
 }
 
+function bloqueOcupadoPor(dia, bloque, ramoIdActual, rowIndexActual){
+  for(const rr of state.ramos){
+    const sesiones = rr.sesiones || [];
+    for(let idx=0; idx<sesiones.length; idx++){
+      if(rr.id===ramoIdActual && idx===rowIndexActual) continue;
+      const s = sesiones[idx];
+      if(s.dia && s.bloque && s.dia===dia && String(s.bloque)===String(bloque)){
+        return rr.nombre;
+      }
+    }
+  }
+  return null;
+}
+
 function buildScheduleMap(){
   const map = {};
   state.ramos.forEach(r=>{
@@ -1848,9 +1862,23 @@ function attachEvents(){
             const prefix = parseUbicacionPrefix(input.value);
             if(prefix) autocompleteUbicacion(r, i, prefix);
           } else if(field==='bloque'){
-            row.bloque = input.value || '1';
+            const nuevoBloque = input.value || '1';
+            const conflicto = row.dia ? bloqueOcupadoPor(row.dia, nuevoBloque, r.id, i) : null;
+            if(conflicto){
+              toast(`Ese bloque ya está ocupado por ${conflicto}`);
+              render();
+              return;
+            }
+            row.bloque = nuevoBloque;
           } else if(field==='dia'){
-            row.dia = input.value;
+            const nuevoDia = input.value;
+            const conflicto = nuevoDia ? bloqueOcupadoPor(nuevoDia, row.bloque, r.id, i) : null;
+            if(conflicto){
+              toast(`Ese bloque ya está ocupado por ${conflicto}`);
+              render();
+              return;
+            }
+            row.dia = nuevoDia;
           } else if(field==='tipo'){
             row.tipo = input.value;
           }
