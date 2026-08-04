@@ -1506,7 +1506,7 @@ function renderInicio(){
         <div class="inicio-prueba-ramo">${escapeHtml(prueba.ramo)}</div>
         <div class="inicio-prueba-fecha">${formatFechaCorta(prueba.fecha)}</div>
         <div class="inicio-prueba-tipo">${escapeHtml(prueba.tipo)}</div>
-        <div class="inicio-prueba-porc">${prueba.porcentaje ? prueba.porcentaje+'%' : '-'}</div>
+        <div class="inicio-prueba-porc">${prueba.porcentaje ? formatPorcentaje(prueba.porcentaje)+'%' : '-'}</div>
       ` : `<div class="hint">No hay próximas evaluaciones.</div>`}
     </div>
 
@@ -1633,7 +1633,7 @@ function tablaEvaluaciones(evals){
       <td>${escapeHtml(e.tipo)}</td>
       <td><span class="cal-fecha-cell ${esPasada(e.fecha)?'pasada':'pendiente'}" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</span></td>
       <td>${escapeHtml(e.nota||'-')}</td>
-      <td>${e.porcentaje ? e.porcentaje+'%' : '-'}</td>
+      <td>${e.porcentaje ? formatPorcentaje(e.porcentaje)+'%' : '-'}</td>
       <td>${escapeHtml(e.sala)}</td>
     </tr>
   `).join('');
@@ -1658,7 +1658,7 @@ function tablaEvaluacionesVertical(evals){
   const filaPrueba   = fila('Prueba', evals.map(e=>`<td>${escapeHtml(e.tipo)}</td>`).join(''));
   const filaFecha    = fila('Fecha', evals.map(e=>`<td><span class="cal-fecha-cell ${esPasada(e.fecha)?'pasada':'pendiente'}" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</span></td>`).join(''));
   const filaNota     = fila('Nota', evals.map(e=>`<td>${escapeHtml(e.nota||'-')}</td>`).join(''));
-  const filaPorc     = fila('%', evals.map(e=>`<td>${e.porcentaje ? e.porcentaje+'%' : '-'}</td>`).join(''));
+  const filaPorc     = fila('%', evals.map(e=>`<td>${e.porcentaje ? formatPorcentaje(e.porcentaje)+'%' : '-'}</td>`).join(''));
   const filaSala     = fila('Sala', evals.map(e=>`<td>${escapeHtml(e.sala)}</td>`).join(''));
 
   return `
@@ -2080,7 +2080,7 @@ function attachEvents(){
             const idxFila = set.arr.findIndex(e=>e.id===id);
             if(idxFila>-1){
               const inputPorc = document.querySelector(`#evalBody_${target} tr[data-row="${idxFila}"] input[data-field="porcentaje"]`);
-              if(inputPorc) inputPorc.value = set.arr[idxFila].porcentaje;
+              if(inputPorc) inputPorc.value = formatPorcentaje(set.arr[idxFila].porcentaje);
             }
           });
         });
