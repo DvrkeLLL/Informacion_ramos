@@ -554,7 +554,7 @@ function aplicarDescartePeorNotaSet(evaluaciones, grupos){
       const activas = filas.filter(f=> !f.excluida);
       const total = parseFloat(grupo.porcentajeTotal) || 0;
       if(activas.length>0 && total>0){
-        const cada = Math.round((total/activas.length)*100)/100;
+        const cada = truncarDecimal(total/activas.length);
         activas.forEach(f=> f.porcentaje = cada);
       }
     }
@@ -739,7 +739,7 @@ function renderTablaSeccion(r, target, titulo){
       <td class="${numCellClass}" data-selrow="${row.id}" data-idx="${i}" data-target="${target}">${i+1}</td>
       <td><input type="text" data-field="tipo" class="${row.tipoSuggested?'suggested':''}" value="${escapeHtml(row.tipo||'')}" placeholder="ej: PEP 1"></td>
       <td><input type="text" data-field="nota" value="${escapeHtml(row.nota||'')}" placeholder="-" style="width:56px;"></td>
-      <td><input type="number" data-field="porcentaje" value="${row.porcentaje||''}" placeholder="%" style="width:56px;"></td>
+      <td><input type="number" data-field="porcentaje" value="${row.porcentaje==='' || row.porcentaje==null ? '' : formatPorcentaje(row.porcentaje)}" placeholder="%" style="width:56px;"></td>
       <td class="fecha-cell">
         <input type="date" data-field="fecha" value="${row.fecha||''}">
         <div class="hora-row">
@@ -754,6 +754,9 @@ function renderTablaSeccion(r, target, titulo){
   return `
     <div class="eval-seccion" data-target="${target}">
       <h3 class="eval-seccion-title">${titulo}</h3>
+      <div class="group-bar">
+        <button class="btn-ghost" data-repartirigual="${sfx}" style="width:100%;">Repartir % en partes iguales</button>
+      </div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>N</th><th>Tipo de prueba</th><th>Nota</th><th>%</th><th>Fecha</th><th>Sala</th></tr></thead>
@@ -1169,6 +1172,15 @@ function formatNota(n){
   return n.toFixed(1).replace('.', ',');
 }
 
+function truncarDecimal(n){
+  const v = parseFloat(n);
+  if(isNaN(v)) return 0;
+  return Math.trunc(v*10)/10;
+}
+function formatPorcentaje(n){
+  return truncarDecimal(n).toFixed(1);
+}
+
 /* Calcula la nota necesaria en las evaluaciones pendientes para llegar
    a un promedio ponderado interno de 3,95 (que redondea a 4,0).
    Devuelve null si ya no quedan evaluaciones pendientes. */
@@ -1249,7 +1261,7 @@ function buildEvalLinesData(evals){
     if(notaValida && !e.excluida){ sumW += w/100; sumWN += notaNum * (w/100); }
     const notaTxt = notaValida ? formatNota(notaNum) : '-';
     const claseExcl = e.excluida ? ' linea-excluida' : '';
-    const wTxt = e.excluida ? 0 : w;
+    const wTxt = e.excluida ? '0.0' : formatPorcentaje(w);
     return `<div class="hor-line${claseExcl}">${escapeHtml(e.tipo || '-')}(${wTxt}%): ${notaTxt}</div>`;
   }).join('');
   const promedio = sumW>0 ? (sumWN/sumW) : null;
@@ -1807,6 +1819,17 @@ function wireSeccionEventos(r, target){
     };
   });
 
+  const repartirIgualBtn = document.querySelector(`[data-repartirigual="${sfx}"]`);
+  if(repartirIgualBtn){
+    repartirIgualBtn.onclick = ()=>{
+      if(!set.arr.length) return;
+      const cada = truncarDecimal(100/set.arr.length);
+      set.arr.forEach(row=> row.porcentaje = cada);
+      persist(); render();
+      toast('Porcentaje repartido en partes iguales');
+    };
+  }
+
   document.querySelectorAll(`#evalBody_${sfx} tr`).forEach(tr=>{
     const i = parseInt(tr.dataset.row,10);
     tr.querySelectorAll('input').forEach(input=>{
@@ -1824,7 +1847,7 @@ function wireSeccionEventos(r, target){
         } else if(field==='sala'){
           row.sala = input.value.trim()==='' ? '-' : input.value;
         } else if(field==='porcentaje'){
-          row.porcentaje = input.value;
+          row.porcentaje = input.value.trim()==='' ? '' : truncarDecimal(input.value);
         } else if(field==='fecha'){
           row.fecha = input.value;
         } else if(field==='hora'){
@@ -1981,11 +2004,11 @@ function attachEvents(){
         let msgs = [];
         if(r.nEval){
           const suma = r.evaluaciones.reduce((s,row)=> row.excluida ? s : s + (parseFloat(row.porcentaje)||0), 0);
-          if(Math.round(suma) !== 100) msgs.push(`Teoría: los porcentajes suman ${suma}% (deben sumar 100%).`);
+          if(Math.round(suma) !== 100) msgs.push(`Teoría: los porcentajes suman ${formatPorcentaje(suma)}% (deben sumar 100%).`);
         }
         if(r.separarLab && r.nEvalLab){
           const sumaLab = r.evaluacionesLab.reduce((s,row)=> row.excluida ? s : s + (parseFloat(row.porcentaje)||0), 0);
-          if(Math.round(sumaLab) !== 100) msgs.push(`Laboratorio: los porcentajes suman ${sumaLab}% (deben sumar 100%).`);
+          if(Math.round(sumaLab) !== 100) msgs.push(`Laboratorio: los porcentajes suman ${formatPorcentaje(sumaLab)}% (deben sumar 100%).`);
         }
         const warnDiv = document.getElementById('evalWarn');
         if(msgs.length){
