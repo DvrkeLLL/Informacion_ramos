@@ -1139,9 +1139,11 @@ function renderHorario(){
     for(const dia of DIAS_ORDEN){
       const slot = map[dia+'-'+b];
       if(slot){
+        // Si el bloque no es de teoría, se marca el tipo junto al nombre (ej: Química - L)
+        const sufijoTipo = (slot.tipo && slot.tipo!=='T') ? ` - ${escapeHtml(slot.tipo)}` : '';
         gridHtml += `
           <div class="hor-card" data-dia="${slot.dia}" data-bloque="${slot.bloque}">
-            <div class="hor-ramo">${escapeHtml(slot.ramo)}</div>
+            <div class="hor-ramo">${escapeHtml(slot.ramo)}${sufijoTipo}</div>
             <div class="hor-sala">${escapeHtml(slot.ubicacion)}</div>
           </div>`;
       } else {
