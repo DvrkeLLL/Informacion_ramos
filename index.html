@@ -244,31 +244,6 @@
   .toast.show{opacity:1;}
   .hint{font-size:11px;color:var(--ink-soft);margin:0 18px 14px;line-height:1.5;}
 
-  /* ---------- AGRUPAR NOTAS ---------- */
-  .num-cell-group{background:rgba(47,110,78,0.1);cursor:pointer;font-weight:800;}
-  .num-cell-selectable{cursor:pointer;}
-  .num-cell-pending{background:rgba(176,105,42,0.14);font-weight:800;}
-
-  tr.grupo-conf td{background:rgba(47,110,78,0.06);border-top:2px solid transparent;border-bottom:2px solid transparent;}
-  tr.grupo-conf-top td{border-top-color:var(--accent);}
-  tr.grupo-conf-bottom td{border-bottom-color:var(--accent);}
-  tr.grupo-conf td:first-child{border-left:2px solid var(--accent);}
-  tr.grupo-conf td:last-child{border-right:2px solid var(--accent);}
-  tr.grupo-conf-top td:first-child{border-top-left-radius:10px;}
-  tr.grupo-conf-top td:last-child{border-top-right-radius:10px;}
-  tr.grupo-conf-bottom td:first-child{border-bottom-left-radius:10px;}
-  tr.grupo-conf-bottom td:last-child{border-bottom-right-radius:10px;}
-
-  tr.grupo-pend td{background:rgba(176,105,42,0.07);border-top:2px dashed transparent;border-bottom:2px dashed transparent;}
-  tr.grupo-pend-top td{border-top-color:var(--pastel-orange-ink);}
-  tr.grupo-pend-bottom td{border-bottom-color:var(--pastel-orange-ink);}
-  tr.grupo-pend td:first-child{border-left:2px dashed var(--pastel-orange-ink);}
-  tr.grupo-pend td:last-child{border-right:2px dashed var(--pastel-orange-ink);}
-
-  .group-bar{margin:0 18px 14px;display:flex;gap:10px;}
-  .group-bar .btn-primary{flex:1;}
-  .group-bar button:disabled{opacity:0.45;pointer-events:none;}
-
   .fila-excluida td, .fila-excluida input, .fila-excluida select{
     color:var(--ink-soft) !important;text-decoration:line-through;opacity:0.6;
   }
@@ -286,6 +261,42 @@
   }
   .switch-toggle[data-on="1"]{background:var(--accent);}
   .switch-toggle[data-on="1"]::after{left:23px;}
+  .switch-toggle.locked{background:#E4E9E1;cursor:not-allowed;opacity:.65;}
+  .switch-toggle.locked::after{background:var(--bg);}
+
+  /* ---------- EVALUACIÓN INDIVIDUAL / GRUPO ---------- */
+  .categoria{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin:0 18px 14px;overflow:hidden;}
+  .categoria.individual{border-color:#CFE0D6;}
+  .tag-individual{
+    display:inline-block;font-size:10px;font-weight:700;font-family:var(--font-display);color:var(--accent-dark);
+    background:var(--accent-wash);border-radius:20px;padding:4px 10px;margin:14px 16px 0;
+  }
+  .cat-header{padding:14px 16px 4px;}
+  .categoria.individual .cat-header{padding-top:8px;}
+  .cat-top-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+  .cat-nombre{
+    flex:1;font-family:var(--font-display);font-size:15.5px;font-weight:700;border:none;background:transparent;
+    padding:2px 0;color:var(--ink);
+  }
+  .cat-nombre:focus{outline:none;border-bottom:1px solid var(--accent);}
+  .cat-peso-box{display:flex;align-items:center;gap:3px;background:var(--th-bg);border-radius:9px;padding:5px 9px;flex-shrink:0;}
+  .cat-peso-box input{width:32px;border:none;background:transparent;text-align:right;font-weight:700;font-size:13px;padding:0;color:var(--ink);}
+  .cat-peso-box span{font-size:13px;font-weight:700;color:var(--ink-soft);}
+  .cat-del{
+    width:28px;height:28px;border-radius:50%;background:#F5EAE8;color:var(--danger);
+    display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;flex-shrink:0;
+  }
+  .categoria .switch-row{margin-bottom:12px;}
+  .add-eval{
+    display:block;width:100%;padding:13px;background:var(--th-bg);border:none;border-top:1px solid var(--border);
+    color:var(--accent-dark);font-weight:700;font-family:var(--font-display);font-size:12.5px;cursor:pointer;
+  }
+  .add-buttons-row{margin:0 18px 16px;display:flex;gap:10px;}
+  .add-btn{
+    flex:1;padding:14px 8px;border-radius:var(--radius-sm);border:1.5px dashed var(--border);
+    background:transparent;color:var(--accent-dark);font-weight:700;font-family:var(--font-display);font-size:12px;cursor:pointer;line-height:1.3;
+  }
+  .add-btn .sub{display:block;font-size:10px;font-weight:400;font-family:var(--font-body);color:var(--ink-soft);margin-top:3px;}
 
   /* ---------- HORARIO ---------- */
   .hor-dias-header{
@@ -504,33 +515,40 @@ function toast(msg){
 }
 function uid(){ return 'r'+Math.random().toString(36).slice(2,9); }
 
-/* ============ AGRUPAR NOTAS (selección manual con mantener presionado + arrastrar) ============ */
-let selState = { active:false, pending:new Set(), anchorIdx:null, longPressTimer:null, isDraggingLongPress:false, target:null };
-
-function resetSelState(){
-  clearTimeout(selState.longPressTimer);
-  selState = { active:false, pending:new Set(), anchorIdx:null, longPressTimer:null, isDraggingLongPress:false, target:null };
-}
+/* ============ EVALUACIONES: individuales y grupos ============ */
 function getGroupOfRow(grupos, rowId){
   return (grupos||[]).find(g=> g.rowIds.includes(rowId));
 }
-let openGrupoId = null;
 
 function tieneLab(r){ return (r.sesiones||[]).some(s=>s.tipo==='L'); }
 
 function getEvalSet(r, target){
   return target==='lab'
-    ? {arr:r.evaluacionesLab||[], n:r.nEvalLab||0, grupos:r.gruposEvalLab||[]}
-    : {arr:r.evaluaciones||[], n:r.nEval||0, grupos:r.gruposEval||[]};
+    ? {arr:r.evaluacionesLab||[], grupos:r.gruposEvalLab||[]}
+    : {arr:r.evaluaciones||[], grupos:r.gruposEval||[]};
 }
 
-function findGrupoContext(r, grupoId){
-  if(!grupoId) return null;
-  let g = (r.gruposEval||[]).find(x=>x.id===grupoId);
-  if(g) return {grupo:g, target:'teoria'};
-  g = (r.gruposEvalLab||[]).find(x=>x.id===grupoId);
-  if(g) return {grupo:g, target:'lab'};
-  return null;
+/* Al agregar una evaluación nueva a un grupo, si la primera fila del grupo
+   ya tiene nombre, las siguientes se numeran solas a partir de ese nombre
+   (Control -> Control 1, Control 2...). Solo ocurre al presionar el botón
+   de agregar; editar los nombres a mano después no la vuelve a disparar. */
+function agregarEvalAGrupo(set, grupo){
+  const filas = grupo.rowIds.map(id=> set.arr.find(e=>e.id===id)).filter(Boolean);
+  const primero = filas[0];
+  let nuevaFila;
+  if(primero && primero.tipo && String(primero.tipo).trim()){
+    const raw = String(primero.tipo).trim();
+    const m = raw.match(/^(.*?)\s*(\d+)$/);
+    let base, numPrimero;
+    if(m){ base = m[1].trim(); numPrimero = parseInt(m[2],10); }
+    else { base = raw; numPrimero = 1; primero.tipo = `${base} 1`; primero.tipoSuggested = false; }
+    const nuevoNum = numPrimero + filas.length;
+    nuevaFila = {id:uid(), tipo:`${base} ${nuevoNum}`, tipoSuggested:true, nota:'', porcentaje:'', fecha:'', hora:'', sala:'', excluida:false};
+  } else {
+    nuevaFila = {id:uid(), tipo:'', nota:'', porcentaje:'', fecha:'', hora:'', sala:'', excluida:false};
+  }
+  set.arr.push(nuevaFila);
+  grupo.rowIds.push(nuevaFila.id);
 }
 
 /* Recalcula, para cada grupo con "descartarPeor" activo, cuál es actualmente
@@ -670,7 +688,7 @@ function renderDetail(){
       <div class="section-btn" data-go="evaluaciones">
         <div>
           <div class="label">Evaluaciones</div>
-          <div class="status ${r.nEval?'ok':''}">${r.nEval? r.nEval+' evaluaciones configuradas' : 'Sin configurar — toca para agregarlas'}</div>
+          <div class="status ${r.evaluaciones && r.evaluaciones.length?'ok':''}">${r.evaluaciones && r.evaluaciones.length? r.evaluaciones.length+' evaluaciones configuradas' : 'Sin configurar — toca para agregarlas'}</div>
         </div>
         <div class="chev">${ICONS.chev}</div>
       </div>
@@ -692,93 +710,117 @@ function renderDetail(){
   `;
 }
 
-function renderTablaSeccion(r, target, titulo){
-  const set = getEvalSet(r, target);
-  const sfx = target;
-  if(!set.n){
-    return `
-      <div class="eval-seccion">
-        <h3 class="eval-seccion-title">${titulo}</h3>
-        <div class="inline-form">
-          <label>¿Cuántas evaluaciones tiene ${target==='lab' ? 'el laboratorio' : (titulo==='Evaluaciones' ? 'este ramo' : 'la teoría')}?</label>
-          <input type="number" min="1" id="nEvalInput_${sfx}" placeholder="ej: 4">
-          <button class="btn-primary" data-creareval="${sfx}">Crear tabla</button>
+function renderFilaIndividual(row, target){
+  return `
+  <div class="categoria individual" data-target="${target}">
+    <span class="tag-individual">Evaluación individual</span>
+    <div class="cat-header">
+      <div class="cat-top-row">
+        <div class="cat-peso-box" style="margin-left:auto;">
+          <input type="number" value="${row.porcentaje==='' || row.porcentaje==null ? '' : formatPorcentaje(row.porcentaje)}" data-indpeso="${row.id}" data-target="${target}">
+          <span>%</span>
         </div>
-      </div>`;
-  }
-  set.arr.forEach(row=>{ if(!row.id) row.id = uid(); if(row.excluida===undefined) row.excluida=false; });
-  const repartoKey = target==='lab' ? 'repartoIgualLab' : 'repartoIgualTeoria';
-  const repartoActivo = !!r[repartoKey];
+        <div class="cat-del" data-inddel="${row.id}" data-target="${target}">✕</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nombre</th><th>Nota</th><th>Fecha</th><th>Sala</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><input type="text" data-rowfield="tipo" data-rowid="${row.id}" data-target="${target}" value="${escapeHtml(row.tipo||'')}" placeholder="ej: Tarea 1" style="min-width:100px;"></td>
+            <td><input type="text" data-rowfield="nota" data-rowid="${row.id}" data-target="${target}" value="${escapeHtml(row.nota||'')}" placeholder="-" style="width:56px;"></td>
+            <td class="fecha-cell">
+              <input type="date" data-rowfield="fecha" data-rowid="${row.id}" data-target="${target}" value="${row.fecha||''}">
+              <div class="hora-row">
+                <input type="time" data-rowfield="hora" data-rowid="${row.id}" data-target="${target}" value="${row.hora||''}">
+                ${row.hora ? `<div class="clear-hora" data-clearhora="${row.id}" data-target="${target}">✕</div>` : ''}
+              </div>
+            </td>
+            <td><input type="text" data-rowfield="sala" data-rowid="${row.id}" data-target="${target}" value="${escapeHtml(row.sala||'')}" placeholder="-" style="width:56px;"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
 
-  const rows = set.arr.map((row,i)=>{
-    const grp = getGroupOfRow(set.grupos, row.id);
-    const isPending = selState.active && selState.target===target && selState.pending.has(row.id);
-    const prevRow = set.arr[i-1];
-    const nextRow = set.arr[i+1];
+function renderGrupoCard(set, grupo, target){
+  const filas = grupo.rowIds.map(id=> set.arr.find(e=>e.id===id)).filter(Boolean);
+  const descartarLocked = !grupo.repartirActivo;
 
-    let trClasses = [];
-    if(row.excluida) trClasses.push('fila-excluida');
-    if(grp){
-      trClasses.push('grupo-conf');
-      const prevSame = prevRow && getGroupOfRow(set.grupos, prevRow.id)===grp;
-      const nextSame = nextRow && getGroupOfRow(set.grupos, nextRow.id)===grp;
-      if(!prevSame) trClasses.push('grupo-conf-top');
-      if(!nextSame) trClasses.push('grupo-conf-bottom');
-    } else if(isPending){
-      trClasses.push('grupo-pend');
-      const prevPend = prevRow && selState.target===target && selState.pending.has(prevRow.id);
-      const nextPend = nextRow && selState.target===target && selState.pending.has(nextRow.id);
-      if(!prevPend) trClasses.push('grupo-pend-top');
-      if(!nextPend) trClasses.push('grupo-pend-bottom');
-    }
-
-    let numCellClass = 'num-cell';
-    if(grp) numCellClass += ' num-cell-group';
-    else if(selState.active && selState.target===target) numCellClass += ' num-cell-selectable' + (isPending ? ' num-cell-pending' : '');
-
+  const rows = filas.map((row,i)=>{
+    const pctDisabled = row.excluida || grupo.repartirActivo;
+    const pctVal = row.excluida ? 0 : (row.porcentaje==='' || row.porcentaje==null ? '' : formatPorcentaje(row.porcentaje));
     return `
-    <tr data-row="${i}" class="${trClasses.join(' ')}">
-      <td class="${numCellClass}" data-selrow="${row.id}" data-idx="${i}" data-target="${target}">${i+1}</td>
-      <td><input type="text" data-field="tipo" class="${row.tipoSuggested?'suggested':''}" value="${escapeHtml(row.tipo||'')}" placeholder="ej: PEP 1"></td>
-      <td><input type="text" data-field="nota" value="${escapeHtml(row.nota||'')}" placeholder="-" style="width:56px;"></td>
-      <td><input type="number" data-field="porcentaje" value="${row.porcentaje==='' || row.porcentaje==null ? '' : formatPorcentaje(row.porcentaje)}" placeholder="%" style="width:56px;" ${repartoActivo?'disabled':''}></td>
+    <tr class="${row.excluida?'fila-excluida':''}">
+      <td class="num-cell">${i+1}</td>
+      <td><input type="text" data-rowfield="tipo" data-rowid="${row.id}" data-target="${target}" class="${row.tipoSuggested?'suggested':''}" value="${escapeHtml(row.tipo||'')}" placeholder="ej: Control 1" style="min-width:90px;"></td>
+      <td><input type="text" data-rowfield="nota" data-rowid="${row.id}" data-target="${target}" value="${escapeHtml(row.nota||'')}" placeholder="-" style="width:50px;"></td>
+      <td><input type="number" data-rowfield="porcentaje" data-rowid="${row.id}" data-target="${target}" value="${pctVal}" placeholder="%" style="width:50px;" ${pctDisabled?'disabled':''}></td>
       <td class="fecha-cell">
-        <input type="date" data-field="fecha" value="${row.fecha||''}">
+        <input type="date" data-rowfield="fecha" data-rowid="${row.id}" data-target="${target}" value="${row.fecha||''}">
         <div class="hora-row">
-          <input type="time" data-field="hora" value="${row.hora||''}">
+          <input type="time" data-rowfield="hora" data-rowid="${row.id}" data-target="${target}" value="${row.hora||''}">
           ${row.hora ? `<div class="clear-hora" data-clearhora="${row.id}" data-target="${target}">✕</div>` : ''}
         </div>
       </td>
-      <td><input type="text" data-field="sala" value="${escapeHtml(row.sala||'')}" placeholder="-" style="width:56px;"></td>
+      <td><input type="text" data-rowfield="sala" data-rowid="${row.id}" data-target="${target}" value="${escapeHtml(row.sala||'')}" placeholder="-" style="width:50px;"></td>
     </tr>`;
   }).join('');
 
   return `
+  <div class="categoria" data-target="${target}">
+    <div class="cat-header">
+      <div class="cat-top-row">
+        <input type="text" class="cat-nombre" value="${escapeHtml(grupo.nombre)}" data-gruponombre="${grupo.id}" data-target="${target}">
+        <div class="cat-peso-box">
+          <input type="number" value="${formatPorcentaje(grupo.porcentajeTotal||0)}" data-grupopeso="${grupo.id}" data-target="${target}">
+          <span>%</span>
+        </div>
+        <div class="cat-del" data-grupodel="${grupo.id}" data-target="${target}">✕</div>
+      </div>
+      <div class="switch-row">
+        <div class="switch-label">
+          <div class="switch-title">Distribuir % en partes iguales</div>
+          <div class="switch-sub">Reparte el ${formatPorcentaje(grupo.porcentajeTotal||0)}% del grupo por igual entre sus evaluaciones</div>
+        </div>
+        <div class="switch-toggle" data-grupotoggledist="${grupo.id}" data-target="${target}" data-on="${grupo.repartirActivo?'1':'0'}"></div>
+      </div>
+      <div class="switch-row" style="margin-bottom:0;">
+        <div class="switch-label">
+          <div class="switch-title">Descartar peor nota</div>
+          <div class="switch-sub">${descartarLocked ? 'Activa primero "Distribuir % en partes iguales"' : 'Se recalcula sola dentro de este grupo'}</div>
+        </div>
+        <div class="switch-toggle ${descartarLocked?'locked':''}" data-grupotoggledescartar="${grupo.id}" data-target="${target}" data-on="${grupo.descartarPeor?'1':'0'}"></div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>N</th><th>Tipo de prueba</th><th>Nota</th><th>%</th><th>Fecha</th><th>Sala</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="6" style="color:var(--ink-soft);padding:16px;">Sin evaluaciones aún</td></tr>`}</tbody>
+      </table>
+    </div>
+    <button class="add-eval" data-addevalgrupo="${grupo.id}" data-target="${target}">+ Agregar evaluación a "${escapeHtml(grupo.nombre)}"</button>
+  </div>`;
+}
+
+function renderTablaSeccion(r, target, titulo){
+  const set = getEvalSet(r, target);
+  set.arr.forEach(row=>{ if(!row.id) row.id = uid(); if(row.excluida===undefined) row.excluida=false; });
+
+  const individuales = set.arr.filter(row=> !getGroupOfRow(set.grupos, row.id));
+  const individualesHtml = individuales.map(row=> renderFilaIndividual(row, target)).join('');
+  const gruposHtml = set.grupos.map(grupo=> renderGrupoCard(set, grupo, target)).join('');
+
+  return `
     <div class="eval-seccion" data-target="${target}">
       <h3 class="eval-seccion-title">${titulo}</h3>
-      <div class="switch-row" style="margin:0 0 14px;">
-        <div class="switch-label">
-          <div class="switch-title">Repartir % en partes iguales</div>
-          <div class="switch-sub">${repartoActivo ? 'Activo — desactiva para editar los % a mano' : 'Reparte 100% entre todas las evaluaciones'}</div>
-        </div>
-        <div class="switch-toggle" id="toggleRepartoIgual_${sfx}" data-on="${repartoActivo?'1':'0'}"></div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>N</th><th>Tipo de prueba</th><th>Nota</th><th>%</th><th>Fecha</th><th>Sala</th></tr></thead>
-          <tbody id="evalBody_${sfx}">${rows}</tbody>
-        </table>
-      </div>
-      <div class="group-bar">
-        ${selState.active && selState.target===target ? `
-          <button class="btn-ghost" data-cancelaragrupar="${sfx}">Cancelar</button>
-          <button class="btn-primary" data-confirmaragrupar="${sfx}" ${selState.pending.size<2?'disabled':''}>Agrupar seleccionadas (${selState.pending.size})</button>
-        ` : `
-          <button class="btn-ghost" data-iniciaragrupar="${sfx}" style="width:100%;" ${selState.active && selState.target!==target ? 'disabled':''}>Agrupar notas</button>
-        `}
-      </div>
-      <div class="save-bar">
-        <button class="btn-ghost" data-cambiarn="${sfx}">Cambiar cantidad</button>
+      ${individualesHtml}
+      ${gruposHtml}
+      <div class="add-buttons-row">
+        <button class="add-btn" data-addindividual="${target}">+ Evaluación individual<span class="sub">Una sola nota, sin grupo</span></button>
+        <button class="add-btn" data-addgrupo="${target}">+ Grupo de evaluaciones<span class="sub">Varias notas, % compartido</span></button>
       </div>
     </div>
   `;
@@ -796,7 +838,6 @@ function renderEvaluaciones(){
   persist();
 
   const puedeLab = tieneLab(r);
-  const grupoCtx = openGrupoId ? findGrupoContext(r, openGrupoId) : null;
 
   const seccionTeoria = renderTablaSeccion(r, 'teoria', r.separarLab ? 'Teoría' : 'Evaluaciones');
   const seccionLab = r.separarLab ? renderTablaSeccion(r, 'lab', 'Laboratorio') : '';
@@ -832,35 +873,6 @@ function renderEvaluaciones(){
     <div id="evalWarn"></div>
     <div class="save-bar">
       <button class="btn-primary" id="guardarEval" style="width:100%;">Guardar</button>
-    </div>
-    <div id="grupoOverlay" class="hor-overlay${grupoCtx?' show':''}">
-      <div class="hor-overlay-card">
-        <div class="hor-overlay-close" id="grupoClose">${ICONS.back}</div>
-        <h2>${grupoCtx ? escapeHtml(grupoCtx.grupo.nombre) : ''}</h2>
-
-        <div class="switch-row">
-          <div class="switch-label">
-            <div class="switch-title">Repartir porcentaje entre el grupo</div>
-            <div class="switch-sub">Reparte el total en partes iguales</div>
-          </div>
-          <div class="switch-toggle" id="toggleRepartir" data-on="${grupoCtx && grupoCtx.grupo.repartirActivo ? '1':'0'}"></div>
-        </div>
-        <div id="repartirInputWrap" style="${grupoCtx && grupoCtx.grupo.repartirActivo ? '' : 'display:none;'}margin:-6px 0 16px;">
-          <label style="font-size:12px;font-weight:700;color:var(--ink-soft);display:block;margin-bottom:6px;">Porcentaje total a repartir</label>
-          <input type="number" id="repartirInput" value="${grupoCtx ? (grupoCtx.grupo.porcentajeTotal||'') : ''}" placeholder="ej: 30"
-            style="width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14.5px;">
-        </div>
-
-        <div class="switch-row">
-          <div class="switch-label">
-            <div class="switch-title">Descartar peor nota</div>
-            <div class="switch-sub">Se actualiza sola si cambia cuál es la peor</div>
-          </div>
-          <div class="switch-toggle" id="toggleDescartar" data-on="${grupoCtx && grupoCtx.grupo.descartarPeor ? '1':'0'}"></div>
-        </div>
-
-        <button class="btn-ghost" id="grupoDesagruparBtn" style="width:100%;color:var(--danger);border-color:var(--danger);margin-top:8px;">Desagrupar</button>
-      </div>
     </div>
   `;
 }
@@ -1801,145 +1813,148 @@ function attachCalendarioEvents(){
 
 function wireSeccionEventos(r, target){
   const set = getEvalSet(r, target);
-  const sfx = target;
 
-  const crearBtn = document.querySelector(`[data-creareval="${sfx}"]`);
-  if(crearBtn){
-    crearBtn.onclick = ()=>{
-      const input = document.getElementById(`nEvalInput_${sfx}`);
-      const n = parseInt(input.value,10);
-      if(!n || n<1){ toast('Ingresa un número válido'); return; }
-      const nuevoArr = Array.from({length:n}, ()=>({id:uid(), tipo:'',nota:'',porcentaje:'',fecha:'',hora:'',sala:'',excluida:false}));
-      if(target==='lab'){ r.nEvalLab = n; r.evaluacionesLab = nuevoArr; r.gruposEvalLab = r.gruposEvalLab||[]; }
-      else { r.nEval = n; r.evaluaciones = nuevoArr; r.gruposEval = r.gruposEval||[]; }
-      persist(); render();
-    };
-    return;
-  }
-
-  document.querySelectorAll(`[data-clearhora][data-target="${sfx}"]`).forEach(btn=>{
+  document.querySelectorAll(`[data-clearhora][data-target="${target}"]`).forEach(btn=>{
     btn.onclick = ()=>{
       const row = set.arr.find(e=>e.id===btn.dataset.clearhora);
       if(row){ row.hora=''; persist(); render(); }
     };
   });
 
-  const toggleReparto = document.getElementById(`toggleRepartoIgual_${sfx}`);
-  if(toggleReparto){
-    toggleReparto.onclick = ()=>{
-      const repartoKey = target==='lab' ? 'repartoIgualLab' : 'repartoIgualTeoria';
-      r[repartoKey] = !r[repartoKey];
-      if(r[repartoKey] && set.arr.length){
-        const cada = truncarDecimal(100/set.arr.length);
-        set.arr.forEach(row=> row.porcentaje = cada);
+  // Campos de cualquier fila (individual o dentro de un grupo)
+  document.querySelectorAll(`[data-rowfield][data-target="${target}"]`).forEach(input=>{
+    const field = input.dataset.rowfield;
+    input.addEventListener('focus', ()=> input.select());
+    input.addEventListener('blur', ()=>{
+      const row = set.arr.find(e=>e.id===input.dataset.rowid);
+      if(!row) return;
+      if(field==='tipo'){
+        row.tipo = input.value;
+        row.tipoSuggested = false;
+        const prefix = parsePrefix1(input.value);
+        if(prefix!==null){
+          const grp = getGroupOfRow(set.grupos, row.id);
+          if(grp){
+            const filas = grp.rowIds.map(id=>set.arr.find(e=>e.id===id)).filter(Boolean);
+            const idx = filas.indexOf(row);
+            autocompleteTipo(filas, idx, prefix);
+          }
+        }
+      } else if(field==='nota'){
+        row.nota = parseNota(input.value) || (input.value.trim()==='' ? '-' : input.value);
+      } else if(field==='sala'){
+        row.sala = input.value.trim()==='' ? '-' : input.value;
+      } else if(field==='porcentaje'){
+        row.porcentaje = input.value.trim()==='' ? '' : truncarDecimal(input.value);
+      } else if(field==='fecha'){
+        row.fecha = input.value;
+      } else if(field==='hora'){
+        row.hora = input.value;
       }
       persist(); render();
-    };
-  }
-
-  document.querySelectorAll(`#evalBody_${sfx} tr`).forEach(tr=>{
-    const i = parseInt(tr.dataset.row,10);
-    tr.querySelectorAll('input').forEach(input=>{
-      const field = input.dataset.field;
-      input.addEventListener('focus', ()=> input.select());
-      input.addEventListener('blur', ()=>{
-        const row = set.arr[i];
-        if(field==='tipo'){
-          row.tipo = input.value;
-          row.tipoSuggested = false;
-          const prefix = parsePrefix1(input.value);
-          if(prefix!==null) autocompleteTipo(set.arr, i, prefix);
-        } else if(field==='nota'){
-          row.nota = parseNota(input.value) || (input.value.trim()==='' ? '-' : input.value);
-        } else if(field==='sala'){
-          row.sala = input.value.trim()==='' ? '-' : input.value;
-        } else if(field==='porcentaje'){
-          row.porcentaje = input.value.trim()==='' ? '' : truncarDecimal(input.value);
-        } else if(field==='fecha'){
-          row.fecha = input.value;
-        } else if(field==='hora'){
-          row.hora = input.value;
-        }
-        persist(); render();
-      });
     });
   });
 
-  const cambiarBtn = document.querySelector(`[data-cambiarn="${sfx}"]`);
-  if(cambiarBtn){
-    cambiarBtn.onclick = ()=>{
-      const n = parseInt(prompt('Nueva cantidad de evaluaciones:', set.n),10);
-      if(!n || n<1) return;
-      const nuevo = Array.from({length:n}, (_,i)=> set.arr[i] || {id:uid(), tipo:'',nota:'',porcentaje:'',fecha:'',hora:'',sala:'',excluida:false});
-      const repartoKey = target==='lab' ? 'repartoIgualLab' : 'repartoIgualTeoria';
-      if(r[repartoKey]){
-        const cada = truncarDecimal(100/n);
-        nuevo.forEach(row=> row.porcentaje = cada);
-      }
-      if(target==='lab'){ r.nEvalLab = n; r.evaluacionesLab = nuevo; } else { r.nEval = n; r.evaluaciones = nuevo; }
+  // Evaluación individual: % y eliminar
+  document.querySelectorAll(`[data-indpeso][data-target="${target}"]`).forEach(input=>{
+    input.addEventListener('blur', ()=>{
+      const row = set.arr.find(e=>e.id===input.dataset.indpeso);
+      if(row){ row.porcentaje = input.value.trim()==='' ? '' : truncarDecimal(input.value); persist(); render(); }
+    });
+  });
+  document.querySelectorAll(`[data-inddel][data-target="${target}"]`).forEach(btn=>{
+    btn.onclick = ()=>{
+      if(!confirm('¿Eliminar esta evaluación?')) return;
+      set.arr = set.arr.filter(e=> e.id !== btn.dataset.inddel);
+      if(target==='lab'){ r.evaluacionesLab = set.arr; } else { r.evaluaciones = set.arr; }
+      persist(); render();
+    };
+  });
+
+  // Botones agregar
+  const addIndBtn = document.querySelector(`[data-addindividual="${target}"]`);
+  if(addIndBtn){
+    addIndBtn.onclick = ()=>{
+      set.arr.push({id:uid(), tipo:'', nota:'', porcentaje:'', fecha:'', hora:'', sala:'', excluida:false});
+      if(target==='lab'){ r.evaluacionesLab = set.arr; } else { r.evaluaciones = set.arr; }
+      persist(); render();
+    };
+  }
+  const addGrupoBtn = document.querySelector(`[data-addgrupo="${target}"]`);
+  if(addGrupoBtn){
+    addGrupoBtn.onclick = ()=>{
+      const nextNum = set.grupos.length+1;
+      set.grupos.push({id:uid(), nombre:'Grupo '+nextNum, rowIds:[], repartirActivo:true, descartarPeor:false, porcentajeTotal:0});
+      if(target==='lab'){ r.gruposEvalLab = set.grupos; } else { r.gruposEval = set.grupos; }
       persist(); render();
     };
   }
 
-  const iniciarBtn = document.querySelector(`[data-iniciaragrupar="${sfx}"]`);
-  if(iniciarBtn){
-    iniciarBtn.onclick = ()=>{
-      selState.active = true; selState.pending = new Set(); selState.anchorIdx = null; selState.target = target;
-      render();
-    };
-  }
-  const cancelarBtn = document.querySelector(`[data-cancelaragrupar="${sfx}"]`);
-  if(cancelarBtn){
-    cancelarBtn.onclick = ()=>{ resetSelState(); render(); };
-  }
-  const confirmarBtn = document.querySelector(`[data-confirmaragrupar="${sfx}"]`);
-  if(confirmarBtn){
-    confirmarBtn.onclick = ()=>{
-      if(selState.pending.size<2) return;
-      const grupoKey = target==='lab' ? 'gruposEvalLab' : 'gruposEval';
-      r[grupoKey] = r[grupoKey] || [];
-      const nextNum = r[grupoKey].length+1;
-      r[grupoKey].push({id:uid(), nombre:'Grupo '+nextNum, rowIds:Array.from(selState.pending)});
-      persist(); resetSelState(); render();
-      toast('Grupo creado');
-    };
-  }
-
-  document.querySelectorAll(`[data-selrow][data-target="${sfx}"]`).forEach(cell=>{
-    const rowId = cell.dataset.selrow;
-    const idx = parseInt(cell.dataset.idx,10);
-
-    cell.addEventListener('pointerdown', ()=>{
-      const row = set.arr[idx];
-      if(getGroupOfRow(set.grupos, row.id)) return;
-      selState.longPressTimer = setTimeout(()=>{
-        if(navigator.vibrate) navigator.vibrate(30);
-        selState.active = true;
-        selState.anchorIdx = idx;
-        selState.target = target;
-        selState.pending.add(rowId);
-        selState.isDraggingLongPress = true;
-        render();
-      }, 450);
+  // Nombre y % del grupo
+  document.querySelectorAll(`[data-gruponombre][data-target="${target}"]`).forEach(input=>{
+    input.addEventListener('blur', ()=>{
+      const grupo = set.grupos.find(g=>g.id===input.dataset.gruponombre);
+      if(grupo){ grupo.nombre = input.value.trim() || grupo.nombre; persist(); render(); }
     });
-    cell.addEventListener('pointerup', ()=>{ clearTimeout(selState.longPressTimer); });
-    cell.addEventListener('pointercancel', ()=>{ clearTimeout(selState.longPressTimer); });
-    cell.addEventListener('pointermove', ()=>{ clearTimeout(selState.longPressTimer); });
+  });
+  document.querySelectorAll(`[data-grupopeso][data-target="${target}"]`).forEach(input=>{
+    input.addEventListener('blur', ()=>{
+      const grupo = set.grupos.find(g=>g.id===input.dataset.grupopeso);
+      if(grupo){ grupo.porcentajeTotal = truncarDecimal(input.value)||0; persist(); render(); }
+    });
+  });
 
-    cell.addEventListener('click', ()=>{
-      const row = set.arr[idx];
-      const grp = getGroupOfRow(set.grupos, row.id);
-      if(grp && !selState.active){
-        openGrupoId = grp.id;
-        render();
+  // Switch "distribuir % en partes iguales"
+  document.querySelectorAll(`[data-grupotoggledist][data-target="${target}"]`).forEach(t=>{
+    t.onclick = ()=>{
+      const grupo = set.grupos.find(g=>g.id===t.dataset.grupotoggledist);
+      if(!grupo) return;
+      grupo.repartirActivo = !grupo.repartirActivo;
+      if(!grupo.repartirActivo && grupo.descartarPeor){
+        grupo.descartarPeor = false;
+        toast('"Descartar peor nota" se desactivó: requiere reparto en partes iguales');
+      }
+      persist(); render();
+    };
+  });
+
+  // Switch "descartar peor nota" (bloqueado si no hay reparto igual activo)
+  document.querySelectorAll(`[data-grupotoggledescartar][data-target="${target}"]`).forEach(t=>{
+    t.onclick = ()=>{
+      const grupo = set.grupos.find(g=>g.id===t.dataset.grupotoggledescartar);
+      if(!grupo) return;
+      if(!grupo.repartirActivo){
+        toast('Activa "Distribuir % en partes iguales" para poder descartar la peor nota');
         return;
       }
-      if(selState.active && selState.target===target && !grp){
-        if(selState.pending.has(rowId)) selState.pending.delete(rowId);
-        else selState.pending.add(rowId);
-        render();
-      }
-    });
+      grupo.descartarPeor = !grupo.descartarPeor;
+      persist(); render();
+    };
+  });
+
+  // Eliminar grupo (y sus evaluaciones)
+  document.querySelectorAll(`[data-grupodel][data-target="${target}"]`).forEach(btn=>{
+    btn.onclick = ()=>{
+      const grupo = set.grupos.find(g=>g.id===btn.dataset.grupodel);
+      if(!grupo) return;
+      if(!confirm('¿Eliminar este grupo y todas sus evaluaciones?')) return;
+      set.arr = set.arr.filter(e=> !grupo.rowIds.includes(e.id));
+      set.grupos = set.grupos.filter(g=> g.id !== grupo.id);
+      if(target==='lab'){ r.evaluacionesLab = set.arr; r.gruposEvalLab = set.grupos; }
+      else { r.evaluaciones = set.arr; r.gruposEval = set.grupos; }
+      persist(); render();
+    };
+  });
+
+  // Agregar evaluación a un grupo (con auto-numeración)
+  document.querySelectorAll(`[data-addevalgrupo][data-target="${target}"]`).forEach(btn=>{
+    btn.onclick = ()=>{
+      const grupo = set.grupos.find(g=>g.id===btn.dataset.addevalgrupo);
+      if(!grupo) return;
+      agregarEvalAGrupo(set, grupo);
+      if(target==='lab'){ r.evaluacionesLab = set.arr; } else { r.evaluaciones = set.arr; }
+      persist(); render();
+    };
   });
 }
 
@@ -1948,7 +1963,7 @@ function attachEvents(){
     document.getElementById('addRamoBtn').onclick = ()=>{
       const nombre = prompt('Nombre del ramo:');
       if(nombre && nombre.trim()){
-        state.ramos.push({id:uid(), nombre:nombre.trim(), nEval:0, evaluaciones:[], gruposEval:[], nSemana:0, sesiones:[], profesor:'', seccion:'', separarLab:false, nEvalLab:0, evaluacionesLab:[], gruposEvalLab:[], ponderacionTeoria:50, ponderacionLab:50});
+        state.ramos.push({id:uid(), nombre:nombre.trim(), evaluaciones:[], gruposEval:[], nSemana:0, sesiones:[], profesor:'', seccion:'', separarLab:false, evaluacionesLab:[], gruposEvalLab:[], ponderacionTeoria:50, ponderacionLab:50});
         persist(); render();
       }
     };
@@ -1966,12 +1981,12 @@ function attachEvents(){
       }
     };
     document.querySelectorAll('[data-go]').forEach(el=>{
-      el.onclick = ()=>{ resetSelState(); openGrupoId=null; state.view = el.dataset.go; render(); };
+      el.onclick = ()=>{ state.view = el.dataset.go; render(); };
     });
   }
 
   if(state.view==='evaluaciones'){
-    document.querySelector('[data-back]').onclick = ()=>{ resetSelState(); openGrupoId=null; state.view='detail'; render(); };
+    document.querySelector('[data-back]').onclick = ()=>{ state.view='detail'; render(); };
     const r = getRamo();
 
     const toggleLab = document.getElementById('toggleSepararLab');
@@ -1981,11 +1996,9 @@ function attachEvents(){
         if(r.separarLab){
           r.ponderacionTeoria = r.ponderacionTeoria ?? 50;
           r.ponderacionLab = r.ponderacionLab ?? 50;
-          r.nEvalLab = r.nEvalLab || 0;
           r.evaluacionesLab = r.evaluacionesLab || [];
           r.gruposEvalLab = r.gruposEvalLab || [];
         }
-        resetSelState(); openGrupoId = null;
         persist(); render();
       };
     }
@@ -2014,11 +2027,11 @@ function attachEvents(){
     if(guardarBtn){
       guardarBtn.onclick = ()=>{
         let msgs = [];
-        if(r.nEval){
+        if(r.evaluaciones && r.evaluaciones.length){
           const suma = r.evaluaciones.reduce((s,row)=> row.excluida ? s : s + (parseFloat(row.porcentaje)||0), 0);
           if(Math.round(suma) !== 100) msgs.push(`Teoría: los porcentajes suman ${formatPorcentaje(suma)}% (deben sumar 100%).`);
         }
-        if(r.separarLab && r.nEvalLab){
+        if(r.separarLab && r.evaluacionesLab && r.evaluacionesLab.length){
           const sumaLab = r.evaluacionesLab.reduce((s,row)=> row.excluida ? s : s + (parseFloat(row.porcentaje)||0), 0);
           if(Math.round(sumaLab) !== 100) msgs.push(`Laboratorio: los porcentajes suman ${formatPorcentaje(sumaLab)}% (deben sumar 100%).`);
         }
@@ -2029,72 +2042,6 @@ function attachEvents(){
           if(warnDiv) warnDiv.innerHTML = '';
           persist(); toast('Evaluaciones guardadas'); state.view='detail'; render();
         }
-      };
-    }
-
-    /* ---- Overlay de acciones del grupo (repartir % / descartar peor nota) ---- */
-    const grupoOverlay = document.getElementById('grupoOverlay');
-    document.getElementById('grupoClose').onclick = ()=>{ openGrupoId=null; render(); };
-    grupoOverlay.onclick = (e)=>{ if(e.target===grupoOverlay){ openGrupoId=null; render(); } };
-
-    const ctx = openGrupoId ? findGrupoContext(r, openGrupoId) : null;
-
-    if(ctx){
-      const grupoActivo = ctx.grupo;
-      const target = ctx.target;
-      const set = getEvalSet(r, target);
-
-      document.getElementById('toggleRepartir').onclick = ()=>{
-        grupoActivo.repartirActivo = !grupoActivo.repartirActivo;
-        if(grupoActivo.repartirActivo && !grupoActivo.porcentajeTotal){
-          const filas = grupoActivo.rowIds.map(id=>set.arr.find(e=>e.id===id)).filter(Boolean);
-          const suma = filas.reduce((s,f)=>s+(parseFloat(f.porcentaje)||0),0);
-          grupoActivo.porcentajeTotal = suma>0 ? suma : '';
-        }
-        aplicarDescartePeorNota(r);
-        persist(); render();
-      };
-
-      document.getElementById('toggleDescartar').onclick = ()=>{
-        grupoActivo.descartarPeor = !grupoActivo.descartarPeor;
-        if(grupoActivo.descartarPeor && !grupoActivo.repartirActivo){
-          grupoActivo.repartirActivo = true;
-          if(!grupoActivo.porcentajeTotal){
-            const filas = grupoActivo.rowIds.map(id=>set.arr.find(e=>e.id===id)).filter(Boolean);
-            const suma = filas.reduce((s,f)=>s+(parseFloat(f.porcentaje)||0),0);
-            grupoActivo.porcentajeTotal = suma>0 ? suma : '';
-          }
-        }
-        aplicarDescartePeorNota(r);
-        persist(); render();
-      };
-
-      const repartirInput = document.getElementById('repartirInput');
-      if(repartirInput){
-        repartirInput.addEventListener('input', ()=>{
-          grupoActivo.porcentajeTotal = repartirInput.value;
-          aplicarDescartePeorNota(r);
-          persist();
-          // actualiza solo los inputs de % visibles en la tabla, sin perder el foco de este input
-          grupoActivo.rowIds.forEach(id=>{
-            const idxFila = set.arr.findIndex(e=>e.id===id);
-            if(idxFila>-1){
-              const inputPorc = document.querySelector(`#evalBody_${target} tr[data-row="${idxFila}"] input[data-field="porcentaje"]`);
-              if(inputPorc) inputPorc.value = formatPorcentaje(set.arr[idxFila].porcentaje);
-            }
-          });
-        });
-      }
-
-      document.getElementById('grupoDesagruparBtn').onclick = ()=>{
-        const grupoKey = target==='lab' ? 'gruposEvalLab' : 'gruposEval';
-        r[grupoKey] = (r[grupoKey]||[]).filter(g=>g.id!==grupoActivo.id);
-        grupoActivo.rowIds.forEach(id=>{
-          const fila = set.arr.find(e=>e.id===id);
-          if(fila) fila.excluida = false;
-        });
-        persist(); openGrupoId=null; render();
-        toast('Grupo eliminado');
       };
     }
   }
@@ -2175,33 +2122,6 @@ function attachEvents(){
     };
   }
 }
-
-/* ---- Agrupar notas: arrastre global mientras se mantiene presionado ---- */
-document.addEventListener('pointermove', (e)=>{
-  if(!selState.isDraggingLongPress || selState.anchorIdx===null) return;
-  if(state.section!=='editar' || state.view!=='evaluaciones') return;
-  const r = getRamo();
-  if(!r) return;
-  const target = selState.target || 'teoria';
-  const set = getEvalSet(r, target);
-  const el = document.elementFromPoint(e.clientX, e.clientY);
-  const cell = el && el.closest('[data-selrow]');
-  if(!cell) return;
-  if(cell.dataset.target !== target) return;
-  const idx = parseInt(cell.dataset.idx,10);
-  const lo = Math.min(selState.anchorIdx, idx);
-  const hi = Math.max(selState.anchorIdx, idx);
-  let cambio = false;
-  for(let k=lo;k<=hi;k++){
-    const row = set.arr[k];
-    if(row && !getGroupOfRow(set.grupos,row.id) && !selState.pending.has(row.id)){
-      selState.pending.add(row.id);
-      cambio = true;
-    }
-  }
-  if(cambio) render();
-});
-document.addEventListener('pointerup', ()=>{ selState.isDraggingLongPress = false; });
 
 renderNavOnce();
 render();
