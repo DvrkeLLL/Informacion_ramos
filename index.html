@@ -717,7 +717,37 @@ function updateNavActive(){
   });
 }
 
+/* Al editar una celda se redibuja toda la vista, lo que perdía la posición
+   de scroll: la tabla saltaba al inicio y había que volver a deslizarla para
+   seguir llenando una columna. Se guarda antes y se repone después. */
+function tomarScroll(){
+  const c = document.getElementById('scrollArea');
+  return {
+    y: c ? c.scrollTop : 0,
+    tablas: Array.from(document.querySelectorAll('.table-wrap')).map(t=>t.scrollLeft)
+  };
+}
+function reponerScroll(pos){
+  const aplicar = ()=>{
+    const c = document.getElementById('scrollArea');
+    if(c && pos.y) c.scrollTop = pos.y;
+    document.querySelectorAll('.table-wrap').forEach((t,i)=>{
+      if(pos.tablas[i]) t.scrollLeft = pos.tablas[i];
+    });
+  };
+  aplicar();
+  // Safari en iOS a veces ignora el ajuste hasta el siguiente cuadro
+  requestAnimationFrame(aplicar);
+}
+
 function render(){
+  const pos = tomarScroll();
+  const resultado = renderInterno();
+  reponerScroll(pos);
+  return resultado;
+}
+
+function renderInterno(){
   const c = document.getElementById('scrollArea');
   if(state.section==='inicio'){ c.innerHTML = renderInicio(); attachInicioEvents(); updateNavActive(); return; }
   if(state.section==='horario'){ c.innerHTML = renderHorario(); attachHorarioEvents(); updateNavActive(); return; }
@@ -1143,17 +1173,21 @@ function attachSwipeToDelete(){
         let x = currentX + dx;
         x = Math.max(SWIPE_OPEN, Math.min(0, x));
         card.style.transform = `translateX(${x}px)`;
+      } else if(decided==='v'){
+        // Desplazamiento vertical de la lista: no es un toque, no abre el ramo
+        moved = true;
       }
     });
 
     function endDrag(e){
       if(!dragging) return;
       dragging = false;
+      const distancia = Math.hypot(e.clientX - startX, e.clientY - startY);
       if(decided==='h'){
         const dx = e.clientX - startX;
         const finalX = Math.max(SWIPE_OPEN, Math.min(0, currentX + dx));
         if(finalX < SWIPE_OPEN/2) openWrapFn(wrap); else closeWrap(wrap);
-      } else if(!moved){
+      } else if(!moved && distancia < 8){
         // fue un tap: si estaba abierto, ciérralo; si no, abre el ramo
         if(wrap.dataset.open==='true'){ closeWrap(wrap); }
         else { state.ramoId = wrap.dataset.wrap; state.view='detail'; render(); }
