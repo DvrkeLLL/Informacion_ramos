@@ -448,7 +448,8 @@
   .inicio-prueba-ramo{font-family:var(--font-display);font-weight:800;font-size:18px;margin-bottom:6px;}
   .inicio-prueba-fecha{font-size:13.5px;color:var(--ink-soft);margin-bottom:4px;}
   .inicio-prueba-tipo{font-size:15px;font-weight:700;margin-bottom:4px;}
-  .inicio-prueba-porc{font-size:13px;color:var(--accent-dark);font-weight:700;font-family:var(--font-display);}
+  .inicio-prueba-pond{color:var(--accent-dark);font-family:var(--font-display);font-weight:700;}
+  .inicio-prueba-sala{font-size:13px;color:var(--ink-soft);}
 
   .gear-btn{
     position:absolute;top:20px;right:18px;width:36px;height:36px;border-radius:12px;
@@ -1529,9 +1530,9 @@ function renderInicio(){
       <div class="inicio-etiqueta">Próxima evaluación${listaPruebas.length>1?` <span class="inicio-dots">${state.inicioPruebaIdx+1}/${listaPruebas.length}</span>`:''}</div>
       ${prueba ? `
         <div class="inicio-prueba-ramo">${escapeHtml(prueba.ramo)}</div>
-        <div class="inicio-prueba-fecha">${formatFechaCorta(prueba.fecha)}</div>
-        <div class="inicio-prueba-tipo">${escapeHtml(prueba.tipo)}</div>
-        <div class="inicio-prueba-porc">${prueba.porcentaje ? formatPorcentaje(prueba.porcentaje)+'%' : '-'}</div>
+        <div class="inicio-prueba-fecha">${formatFechaCorta(prueba.fecha)}${prueba.hora ? ' - '+escapeHtml(prueba.hora) : ''}</div>
+        <div class="inicio-prueba-tipo">${escapeHtml(prueba.tipo)}${prueba.porcentaje ? ` <span class="inicio-prueba-pond">- ${formatPorcentaje(prueba.porcentaje)}%</span>` : ''}</div>
+        ${prueba.sala && prueba.sala!=='-' ? `<div class="inicio-prueba-sala">${escapeHtml(prueba.sala)}</div>` : ''}
       ` : `<div class="hint">No hay próximas evaluaciones.</div>`}
     </div>
 
@@ -1657,6 +1658,7 @@ function tablaEvaluaciones(evals){
       <td>${escapeHtml(e.ramo)}</td>
       <td>${escapeHtml(e.tipo)}</td>
       <td><span class="cal-fecha-cell ${esPasada(e.fecha)?'pasada':'pendiente'}" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</span></td>
+      <td>${escapeHtml(e.hora||'-')}</td>
       <td>${escapeHtml(e.nota||'-')}</td>
       <td>${e.porcentaje ? formatPorcentaje(e.porcentaje)+'%' : '-'}</td>
       <td>${escapeHtml(e.sala)}</td>
@@ -1665,7 +1667,7 @@ function tablaEvaluaciones(evals){
   return `
     <div class="table-wrap table-zebra">
       <table>
-        <thead><tr><th>N</th><th>Ramo</th><th>Prueba</th><th>Fecha</th><th>Nota</th><th>%</th><th>Sala</th></tr></thead>
+        <thead><tr><th>N</th><th>Ramo</th><th>Prueba</th><th>Fecha</th><th>Hora</th><th>Nota</th><th>%</th><th>Sala</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -1682,6 +1684,7 @@ function tablaEvaluacionesVertical(evals){
   const filaRamo     = fila('Ramo', evals.map(e=>`<td>${escapeHtml(e.ramo)}</td>`).join(''));
   const filaPrueba   = fila('Prueba', evals.map(e=>`<td>${escapeHtml(e.tipo)}</td>`).join(''));
   const filaFecha    = fila('Fecha', evals.map(e=>`<td><span class="cal-fecha-cell ${esPasada(e.fecha)?'pasada':'pendiente'}" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</span></td>`).join(''));
+  const filaHora     = fila('Hora', evals.map(e=>`<td>${escapeHtml(e.hora||'-')}</td>`).join(''));
   const filaNota     = fila('Nota', evals.map(e=>`<td>${escapeHtml(e.nota||'-')}</td>`).join(''));
   const filaPorc     = fila('%', evals.map(e=>`<td>${e.porcentaje ? formatPorcentaje(e.porcentaje)+'%' : '-'}</td>`).join(''));
   const filaSala     = fila('Sala', evals.map(e=>`<td>${escapeHtml(e.sala)}</td>`).join(''));
@@ -1689,7 +1692,7 @@ function tablaEvaluacionesVertical(evals){
   return `
     <div class="vert-table">
       <table>
-        <tbody>${filaN}${filaRamo}${filaPrueba}${filaFecha}${filaNota}${filaPorc}${filaSala}</tbody>
+        <tbody>${filaN}${filaRamo}${filaPrueba}${filaFecha}${filaHora}${filaNota}${filaPorc}${filaSala}</tbody>
       </table>
     </div>
   `;
