@@ -213,8 +213,9 @@
   td input.suggested{color:var(--ink-soft);font-style:italic;}
   .num-cell{color:var(--ink-soft);font-weight:700;text-align:center;width:34px;touch-action:none;user-select:none;-webkit-user-select:none;}
   .fecha-cell{padding:6px 4px;min-width:100px;}
-  .hora-cell{display:flex;align-items:center;gap:5px;min-width:96px;padding:6px 4px;}
-  .hora-cell input{flex:1;}
+  .hora-cell{min-width:96px;padding:6px 4px;}
+  .hora-inner{display:flex;align-items:center;gap:5px;}
+  .hora-inner input{flex:1;min-width:0;}
   .fecha-cell input, .hora-cell input{
     padding:7px 6px;font-size:12px;
     border:1px solid var(--border) !important;
@@ -267,12 +268,16 @@
   /* ---------- EVALUACIÓN INDIVIDUAL / GRUPO ---------- */
   .categoria{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin:0 18px 14px;overflow:hidden;}
   .categoria.individual{border-color:#CFE0D6;}
-  .tag-individual{
-    display:inline-block;font-size:10px;font-weight:700;font-family:var(--font-display);color:var(--accent-dark);
-    background:var(--accent-wash);border-radius:20px;padding:4px 10px;margin:14px 16px 0;
-  }
   .cat-header{padding:14px 16px 4px;}
-  .categoria.individual .cat-header{padding-top:8px;}
+  .cat-titulo{
+    flex:1;font-family:var(--font-display);font-size:15.5px;font-weight:700;color:var(--ink);
+  }
+  .del-cell{width:34px;padding:6px 4px;text-align:center;}
+  .row-del{
+    width:22px;height:22px;border-radius:50%;background:#F5EAE8;color:var(--danger);
+    display:inline-flex;align-items:center;justify-content:center;font-size:11px;
+    cursor:pointer;flex-shrink:0;
+  }
   .cat-top-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
   .cat-nombre{
     flex:1;font-family:var(--font-display);font-size:15.5px;font-weight:700;border:none;background:transparent;
@@ -710,38 +715,42 @@ function renderDetail(){
   `;
 }
 
-function renderFilaIndividual(row, target){
+/* Tabla única que agrupa todas las evaluaciones sueltas (las que no
+   pertenecen a ningún grupo). Antes cada una era su propia tarjeta. */
+function renderCardIndividuales(filas, target){
+  const rows = filas.map((row,i)=>`
+    <tr>
+      <td class="num-cell">${i+1}</td>
+      <td><input type="text" data-rowfield="tipo" data-rowid="${row.id}" data-target="${target}" value="${escapeHtml(row.tipo||'')}" placeholder="ej: Tarea 1" style="min-width:90px;"></td>
+      <td><input type="text" data-rowfield="nota" data-rowid="${row.id}" data-target="${target}" value="${escapeHtml(row.nota||'')}" placeholder="-" style="width:50px;"></td>
+      <td><input type="number" data-rowfield="porcentaje" data-rowid="${row.id}" data-target="${target}" value="${row.porcentaje==='' || row.porcentaje==null ? '' : formatPorcentaje(row.porcentaje)}" placeholder="%" style="width:50px;"></td>
+      <td class="fecha-cell">
+        <input type="date" data-rowfield="fecha" data-rowid="${row.id}" data-target="${target}" value="${row.fecha||''}">
+      </td>
+      <td class="hora-cell">
+        <div class="hora-inner">
+          <input type="time" data-rowfield="hora" data-rowid="${row.id}" data-target="${target}" value="${row.hora||''}">
+          ${row.hora ? `<div class="clear-hora" data-clearhora="${row.id}" data-target="${target}">✕</div>` : ''}
+        </div>
+      </td>
+      <td><input type="text" data-rowfield="sala" data-rowid="${row.id}" data-target="${target}" value="${escapeHtml(row.sala||'')}" placeholder="-" style="width:50px;"></td>
+      <td class="del-cell"><div class="row-del" data-inddel="${row.id}" data-target="${target}">✕</div></td>
+    </tr>`).join('');
+
   return `
   <div class="categoria individual" data-target="${target}">
-    <span class="tag-individual">Evaluación individual</span>
     <div class="cat-header">
       <div class="cat-top-row">
-        <div class="cat-peso-box" style="margin-left:auto;">
-          <input type="number" value="${row.porcentaje==='' || row.porcentaje==null ? '' : formatPorcentaje(row.porcentaje)}" data-indpeso="${row.id}" data-target="${target}">
-          <span>%</span>
-        </div>
-        <div class="cat-del" data-inddel="${row.id}" data-target="${target}">✕</div>
+        <div class="cat-titulo">Evaluaciones</div>
       </div>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Nombre</th><th>Nota</th><th>Fecha</th><th>Hora</th><th>Sala</th></tr></thead>
-        <tbody>
-          <tr>
-            <td><input type="text" data-rowfield="tipo" data-rowid="${row.id}" data-target="${target}" value="${escapeHtml(row.tipo||'')}" placeholder="ej: Tarea 1" style="min-width:100px;"></td>
-            <td><input type="text" data-rowfield="nota" data-rowid="${row.id}" data-target="${target}" value="${escapeHtml(row.nota||'')}" placeholder="-" style="width:56px;"></td>
-            <td class="fecha-cell">
-              <input type="date" data-rowfield="fecha" data-rowid="${row.id}" data-target="${target}" value="${row.fecha||''}">
-            </td>
-            <td class="hora-cell">
-              <input type="time" data-rowfield="hora" data-rowid="${row.id}" data-target="${target}" value="${row.hora||''}">
-              ${row.hora ? `<div class="clear-hora" data-clearhora="${row.id}" data-target="${target}">✕</div>` : ''}
-            </td>
-            <td><input type="text" data-rowfield="sala" data-rowid="${row.id}" data-target="${target}" value="${escapeHtml(row.sala||'')}" placeholder="-" style="width:56px;"></td>
-          </tr>
-        </tbody>
+        <thead><tr><th>N</th><th>Nombre</th><th>Nota</th><th>%</th><th>Fecha</th><th>Hora</th><th>Sala</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
       </table>
     </div>
+    <button class="add-eval" data-addindividual="${target}">+ Agregar evaluación</button>
   </div>`;
 }
 
@@ -762,8 +771,10 @@ function renderGrupoCard(set, grupo, target){
         <input type="date" data-rowfield="fecha" data-rowid="${row.id}" data-target="${target}" value="${row.fecha||''}">
       </td>
       <td class="hora-cell">
-        <input type="time" data-rowfield="hora" data-rowid="${row.id}" data-target="${target}" value="${row.hora||''}">
-        ${row.hora ? `<div class="clear-hora" data-clearhora="${row.id}" data-target="${target}">✕</div>` : ''}
+        <div class="hora-inner">
+          <input type="time" data-rowfield="hora" data-rowid="${row.id}" data-target="${target}" value="${row.hora||''}">
+          ${row.hora ? `<div class="clear-hora" data-clearhora="${row.id}" data-target="${target}">✕</div>` : ''}
+        </div>
       </td>
       <td><input type="text" data-rowfield="sala" data-rowid="${row.id}" data-target="${target}" value="${escapeHtml(row.sala||'')}" placeholder="-" style="width:50px;"></td>
     </tr>`;
@@ -798,7 +809,7 @@ function renderGrupoCard(set, grupo, target){
     <div class="table-wrap">
       <table>
         <thead><tr><th>N</th><th>Tipo de prueba</th><th>Nota</th><th>%</th><th>Fecha</th><th>Hora</th><th>Sala</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="6" style="color:var(--ink-soft);padding:16px;">Sin evaluaciones aún</td></tr>`}</tbody>
+        <tbody>${rows || `<tr><td colspan="7" style="color:var(--ink-soft);padding:16px;">Sin evaluaciones aún</td></tr>`}</tbody>
       </table>
     </div>
     <button class="add-eval" data-addevalgrupo="${grupo.id}" data-target="${target}">+ Agregar evaluación a "${escapeHtml(grupo.nombre)}"</button>
@@ -810,16 +821,16 @@ function renderTablaSeccion(r, target, titulo){
   set.arr.forEach(row=>{ if(!row.id) row.id = uid(); if(row.excluida===undefined) row.excluida=false; });
 
   const individuales = set.arr.filter(row=> !getGroupOfRow(set.grupos, row.id));
-  const individualesHtml = individuales.map(row=> renderFilaIndividual(row, target)).join('');
+  const individualesHtml = individuales.length ? renderCardIndividuales(individuales, target) : '';
   const gruposHtml = set.grupos.map(grupo=> renderGrupoCard(set, grupo, target)).join('');
 
   return `
     <div class="eval-seccion" data-target="${target}">
-      <h3 class="eval-seccion-title">${titulo}</h3>
+      ${titulo ? `<h3 class="eval-seccion-title">${titulo}</h3>` : ''}
       ${individualesHtml}
       ${gruposHtml}
       <div class="add-buttons-row">
-        <button class="add-btn" data-addindividual="${target}">+ Evaluación individual<span class="sub">Una sola nota, sin grupo</span></button>
+        ${individuales.length ? '' : `<button class="add-btn" data-crearindividuales="${target}">+ Evaluaciones<span class="sub">Tabla de notas sueltas</span></button>`}
         <button class="add-btn" data-addgrupo="${target}">+ Grupo de evaluaciones<span class="sub">Varias notas, % compartido</span></button>
       </div>
     </div>
@@ -839,7 +850,7 @@ function renderEvaluaciones(){
 
   const puedeLab = tieneLab(r);
 
-  const seccionTeoria = renderTablaSeccion(r, 'teoria', r.separarLab ? 'Teoría' : 'Evaluaciones');
+  const seccionTeoria = renderTablaSeccion(r, 'teoria', r.separarLab ? 'Teoría' : null);
   const seccionLab = r.separarLab ? renderTablaSeccion(r, 'lab', 'Laboratorio') : '';
 
   return `
@@ -1855,13 +1866,7 @@ function wireSeccionEventos(r, target){
     });
   });
 
-  // Evaluación individual: % y eliminar
-  document.querySelectorAll(`[data-indpeso][data-target="${target}"]`).forEach(input=>{
-    input.addEventListener('blur', ()=>{
-      const row = set.arr.find(e=>e.id===input.dataset.indpeso);
-      if(row){ row.porcentaje = input.value.trim()==='' ? '' : truncarDecimal(input.value); persist(); render(); }
-    });
-  });
+  // Eliminar una fila de la tabla de evaluaciones sueltas
   document.querySelectorAll(`[data-inddel][data-target="${target}"]`).forEach(btn=>{
     btn.onclick = ()=>{
       if(!confirm('¿Eliminar esta evaluación?')) return;
@@ -1872,20 +1877,26 @@ function wireSeccionEventos(r, target){
   });
 
   // Botones agregar
+  const nuevaFilaSuelta = ()=>{
+    set.arr.push({id:uid(), tipo:'', nota:'', porcentaje:'', fecha:'', hora:'', sala:'', excluida:false});
+    if(target==='lab'){ r.evaluacionesLab = set.arr; } else { r.evaluaciones = set.arr; }
+    persist(); render();
+  };
+  const crearIndBtn = document.querySelector(`[data-crearindividuales="${target}"]`);
+  if(crearIndBtn) crearIndBtn.onclick = nuevaFilaSuelta;
   const addIndBtn = document.querySelector(`[data-addindividual="${target}"]`);
-  if(addIndBtn){
-    addIndBtn.onclick = ()=>{
-      set.arr.push({id:uid(), tipo:'', nota:'', porcentaje:'', fecha:'', hora:'', sala:'', excluida:false});
-      if(target==='lab'){ r.evaluacionesLab = set.arr; } else { r.evaluaciones = set.arr; }
-      persist(); render();
-    };
-  }
+  if(addIndBtn) addIndBtn.onclick = nuevaFilaSuelta;
+
   const addGrupoBtn = document.querySelector(`[data-addgrupo="${target}"]`);
   if(addGrupoBtn){
     addGrupoBtn.onclick = ()=>{
       const nextNum = set.grupos.length+1;
-      set.grupos.push({id:uid(), nombre:'Grupo '+nextNum, rowIds:[], repartirActivo:true, descartarPeor:false, porcentajeTotal:0});
-      if(target==='lab'){ r.gruposEvalLab = set.grupos; } else { r.gruposEval = set.grupos; }
+      const grupo = {id:uid(), nombre:'Grupo '+nextNum, rowIds:[], repartirActivo:true, descartarPeor:false, porcentajeTotal:0};
+      set.grupos.push(grupo);
+      // El grupo nace con una fila lista para escribir
+      agregarEvalAGrupo(set, grupo);
+      if(target==='lab'){ r.gruposEvalLab = set.grupos; r.evaluacionesLab = set.arr; }
+      else { r.gruposEval = set.grupos; r.evaluaciones = set.arr; }
       persist(); render();
     };
   }
