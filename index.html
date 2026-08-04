@@ -451,6 +451,36 @@
   .inicio-prueba-pond{color:var(--accent-dark);font-family:var(--font-display);font-weight:700;}
   .inicio-prueba-sala{font-size:13px;color:var(--ink-soft);}
 
+  /* ---------- CONFIGURACIÓN DEL HORARIO ---------- */
+  .cfg-sec{margin-top:14px;border-top:1px solid var(--border);padding-top:14px;}
+  .cfg-lista{max-height:46vh;overflow-y:auto;margin:10px 0;}
+  .cfg-bloque{display:flex;align-items:center;gap:6px;padding:5px 0;}
+  .cfg-n{
+    width:22px;height:22px;border-radius:50%;background:var(--th-bg);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-display);font-weight:700;font-size:11px;color:var(--ink-soft);
+  }
+  .cfg-bloque input[type=time]{
+    flex:1;min-width:0;border:1px solid var(--border);background:#fff;border-radius:9px;
+    padding:6px;font-size:12px;font-family:var(--font-body);color:var(--ink);
+    -webkit-appearance:none;appearance:none;
+  }
+  .cfg-sep{font-size:11px;color:var(--ink-soft);}
+  .cfg-x{
+    width:22px;height:22px;border-radius:50%;background:#F5EAE8;color:var(--danger);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;
+  }
+  .cfg-desc{display:flex;align-items:center;gap:8px;padding:2px 0 6px 28px;}
+  .cfg-desc input{
+    flex:1;min-width:0;border:none;border-bottom:1px dashed var(--border);background:transparent;
+    font-size:11.5px;color:var(--ink-soft);padding:2px 0;font-family:var(--font-body);
+  }
+  .cfg-desc .switch-toggle{width:34px;height:19px;}
+  .cfg-desc .switch-toggle::after{width:15px;height:15px;top:2px;left:2px;}
+  .cfg-desc .switch-toggle[data-on="1"]::after{left:17px;}
+  .cfg-desc-off input{visibility:hidden;}
+  .cfg-desc-label{font-size:11px;color:var(--ink-soft);flex:1;}
+
   .gear-btn{
     position:absolute;top:20px;right:18px;width:36px;height:36px;border-radius:12px;
     background:var(--card);border:1px solid var(--border);
@@ -482,20 +512,58 @@
 </div>
 
 <script>
-const BLOQUES = [
-  {n:1, rango:'8:15–9:35'},
-  {n:2, rango:'9:50–11:10'},
-  {n:3, rango:'11:25–12:45'},
-  {n:4, rango:'13:45–15:05'},
-  {n:5, rango:'15:20–16:40'},
-  {n:6, rango:'16:55–18:15'},
-];
-function parseRango(rango){
-  const [ini, fin] = rango.replace('–','-').split('-');
-  const toMin = t=>{ const [h,m]=t.split(':').map(Number); return h*60+m; };
-  return {start:toMin(ini), end:toMin(fin)};
+/* ============ CONFIGURACIÓN DEL HORARIO (personalizable) ============
+   Bloques, descansos y días se guardan aparte de los ramos, para que el
+   usuario pueda adaptar la grilla a su universidad. Los valores por
+   defecto son los de siempre: 6 bloques y almuerzo después del 3. */
+const CONFIG_DEFAULT = {
+  bloques: [
+    {inicio:'08:15', fin:'09:35'},
+    {inicio:'09:50', fin:'11:10'},
+    {inicio:'11:25', fin:'12:45'},
+    {inicio:'13:45', fin:'15:05'},
+    {inicio:'15:20', fin:'16:40'},
+    {inicio:'16:55', fin:'18:15'},
+  ],
+  descansos: [{despues:3, nombre:'Almuerzo'}],
+  sabado: false
+};
+function cargarConfig(){
+  try{
+    const guardada = JSON.parse(localStorage.getItem('config_v1'));
+    if(guardada && Array.isArray(guardada.bloques) && guardada.bloques.length){
+      return {
+        bloques: guardada.bloques,
+        descansos: Array.isArray(guardada.descansos) ? guardada.descansos : [],
+        sabado: !!guardada.sabado
+      };
+    }
+  }catch(e){}
+  return JSON.parse(JSON.stringify(CONFIG_DEFAULT));
 }
-const BLOQUES_MIN = BLOQUES.map(b=> ({...b, ...parseRango(b.rango)}));
+function persistConfig(){ localStorage.setItem('config_v1', JSON.stringify(state.config)); }
+
+function hhmm(t){
+  const [h,m] = String(t||'').split(':');
+  return `${String(parseInt(h,10)||0).padStart(2,'0')}:${String(parseInt(m,10)||0).padStart(2,'0')}`;
+}
+function toMin(t){ const [h,m]=String(t||'0:0').split(':').map(Number); return (h||0)*60+(m||0); }
+
+function getBloques(){
+  return state.config.bloques.map((b,i)=>({
+    n:i+1, inicio:hhmm(b.inicio), fin:hhmm(b.fin),
+    rango:`${hhmm(b.inicio)}–${hhmm(b.fin)}`
+  }));
+}
+function getBloquesMin(){
+  return getBloques().map(b=> ({...b, start:toMin(b.inicio), end:toMin(b.fin)}));
+}
+function getDescanso(n){
+  return (state.config.descansos||[]).find(d=> Number(d.despues)===Number(n)) || null;
+}
+function getDias(){
+  return state.config.sabado ? DIAS_BASE.concat(['Sábado']) : DIAS_BASE.slice();
+}
 
 let state = {
   section:'inicio',      // editar | horario | promedio | calendario | inicio
@@ -506,12 +574,16 @@ let state = {
   inicioPruebaIdx:0,
   calYear:null,
   calMonth:null,
+  settingsOpen:false,
+  configOpen:false,
+  config:null,
   ramos: JSON.parse(localStorage.getItem('ramos_v1') || '[]')
 };
+state.config = cargarConfig();
 
-const DIAS_ORDEN = ['Lunes','Martes','Miércoles','Jueves','Viernes'];
-const DIA_HEADER = {Lunes:'L',Martes:'Ma',Miércoles:'Mi',Jueves:'J',Viernes:'V'};
-const DIA_INICIAL = {Lunes:'L',Martes:'M',Miércoles:'W',Jueves:'J',Viernes:'V'};
+const DIAS_BASE = ['Lunes','Martes','Miércoles','Jueves','Viernes'];
+const DIA_HEADER = {Lunes:'L',Martes:'Ma',Miércoles:'Mi',Jueves:'J',Viernes:'V',Sábado:'S'};
+const DIA_INICIAL = {Lunes:'L',Martes:'M',Miércoles:'W',Jueves:'J',Viernes:'V',Sábado:'S'};
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 function persist(){ localStorage.setItem('ramos_v1', JSON.stringify(state.ramos)); }
@@ -906,7 +978,7 @@ function renderSemana(){
       </div>
     `;
   }
-  const DIAS = ['Lunes','Martes','Miércoles','Jueves','Viernes'];
+  const DIAS = getDias();
   const rows = r.sesiones.map((row,i)=>`
     <tr data-row="${i}">
       <td class="num-cell">${i+1}</td>
@@ -918,7 +990,7 @@ function renderSemana(){
       </td>
       <td>
         <select data-field="bloque">
-          ${BLOQUES.map(b=>`<option value="${b.n}" ${String(row.bloque)===String(b.n)?'selected':''}>${b.n}</option>`).join('')}
+          ${getBloques().map(b=>`<option value="${b.n}" ${String(row.bloque)===String(b.n)?'selected':''}>${b.n}</option>`).join('')}
         </select>
       </td>
       <td><input type="text" data-field="ubicacion" class="${row.ubicacionSuggested?'suggested':''}" value="${escapeHtml(row.ubicacion||'')}" placeholder="ej: ED604" style="width:80px;"></td>
@@ -962,7 +1034,11 @@ function renderInfo(){
       <label>Nombre del profesor</label>
       <input type="text" id="profInput" value="${escapeHtml(r.profesor||'')}" placeholder="ej: Juan Pérez">
       <label>Sección</label>
-      <input type="text" id="seccInput" value="${escapeHtml(r.seccion||'')}" placeholder="ej: 2">
+      <input type="text" id="seccInput" value="${escapeHtml(r.seccion||'')}" placeholder="ej: A-2">
+      ${tieneLab(r) ? `
+        <label>Sección laboratorio</label>
+        <input type="text" id="seccLabInput" value="${escapeHtml(r.seccionLab||'')}" placeholder="ej: L-1">
+      ` : ''}
       <button class="btn-primary" id="guardarInfo">Guardar</button>
     </div>
   `;
@@ -1122,7 +1198,8 @@ function buildScheduleMap(){
         if(!map[key]){
           map[key] = {
             ramo:r.nombre, ubicacion:s.ubicacion||'-', tipo:s.tipo||'T',
-            profesor:r.profesor||'-', seccion:r.seccion||'-',
+            profesor:r.profesor||'-',
+            seccion:(s.tipo==='L' && r.seccionLab ? r.seccionLab : r.seccion) || '-',
             dia:s.dia, bloque:s.bloque
           };
         }
@@ -1134,10 +1211,12 @@ function buildScheduleMap(){
 
 function renderHorario(){
   const map = buildScheduleMap();
+  const dias = getDias();
+  const bloques = getBloques();
   let gridHtml = '';
-  for(let b=1;b<=6;b++){
-    for(const dia of DIAS_ORDEN){
-      const slot = map[dia+'-'+b];
+  for(const bl of bloques){
+    for(const dia of dias){
+      const slot = map[dia+'-'+bl.n];
       if(slot){
         // Si el bloque no es de teoría, se marca el tipo junto al nombre (ej: Química - L)
         const sufijoTipo = (slot.tipo && slot.tipo!=='T') ? ` - ${escapeHtml(slot.tipo)}` : '';
@@ -1150,19 +1229,21 @@ function renderHorario(){
         gridHtml += `<div class="hor-card empty"></div>`;
       }
     }
-    if(b===3){
-      gridHtml += `<div class="hor-almuerzo"><span>Almuerzo</span></div>`;
+    const descanso = getDescanso(bl.n);
+    if(descanso){
+      gridHtml += `<div class="hor-almuerzo"><span>${escapeHtml(descanso.nombre||'Descanso')}</span></div>`;
     }
   }
 
+  const cols = `grid-template-columns:repeat(${dias.length},1fr);`;
   return `
     <header class="header-center">
       <h1>HORARIO</h1>
     </header>
-    <div class="hor-dias-header">
-      ${DIAS_ORDEN.map(d=>`<div>${DIA_HEADER[d]}</div>`).join('')}
+    <div class="hor-dias-header" style="${cols}">
+      ${dias.map(d=>`<div>${DIA_HEADER[d]}</div>`).join('')}
     </div>
-    <div class="hor-grid">${gridHtml}</div>
+    <div class="hor-grid" style="${cols}">${gridHtml}</div>
     <div id="horarioOverlay" class="hor-overlay">
       <div class="hor-overlay-card">
         <div class="hor-overlay-close" id="horarioClose">${ICONS.back}</div>
@@ -1184,7 +1265,7 @@ function attachHorarioEvents(){
       const dia = card.dataset.dia, bloque = card.dataset.bloque;
       const slot = map[dia+'-'+bloque];
       if(!slot) return;
-      const bInfo = BLOQUES.find(b=>String(b.n)===String(bloque));
+      const bInfo = getBloques().find(b=>String(b.n)===String(bloque));
       const rango = bInfo ? bInfo.rango.replace('–','-') : '';
       document.getElementById('hoTitulo').textContent = slot.ramo;
       document.getElementById('hoHorario').textContent = `Horario(${DIA_INICIAL[dia]}${bloque}): ${rango}`;
@@ -1395,8 +1476,10 @@ function getSesionesDia(diaNombre){
 }
 function nombreDiaOffset(offsetDays){
   const d = new Date(); d.setDate(d.getDate()+offsetDays);
-  const map = {1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes'};
-  return map[d.getDay()] || null;
+  const map = {1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes',6:'Sábado'};
+  const nombre = map[d.getDay()] || null;
+  if(nombre==='Sábado' && !state.config.sabado) return null;
+  return nombre;
 }
 function getListaClasesProximas(maxItems=12){
   const ahora = new Date();
@@ -1408,7 +1491,7 @@ function getListaClasesProximas(maxItems=12){
     const sesiones = getSesionesDia(diaHoy);
     for(let i=0;i<sesiones.length;i++){
       const s = sesiones[i];
-      const info = BLOQUES_MIN.find(b=>b.n===s.bloque);
+      const info = getBloquesMin().find(b=>b.n===s.bloque);
       if(!info) continue;
       if(nowMin>=info.start && nowMin<=info.end){
         const elapsed = nowMin - info.start;
@@ -1552,8 +1635,395 @@ function renderInicio(){
         <div style="height:10px;"></div>
         <button class="btn-ghost" id="importBtn" style="width:100%;">Importar datos (JSON)</button>
         <input type="file" id="importFile" accept="application/json" style="display:none;">
+        <div style="height:10px;"></div>
+        <button class="btn-ghost" id="importPdfBtn" style="width:100%;">Importar horario (PDF)</button>
+        <input type="file" id="importPdfFile" accept="application/pdf" style="display:none;">
+
+        <div class="cfg-sec">
+          <div class="switch-row" style="margin-bottom:0;">
+            <div class="switch-label">
+              <div class="switch-title">Personalizar horario</div>
+              <div class="switch-sub">${state.config.bloques.length} bloques${state.config.sabado?' · con sábado':''}</div>
+            </div>
+            <div class="switch-toggle" id="toggleCfgPanel" data-on="${state.configOpen?'1':'0'}"></div>
+          </div>
+          ${state.configOpen ? renderConfigHorario() : ''}
+        </div>
       </div>
     </div>
+  `;
+}
+
+/* ============ IMPORTAR HORARIO DESDE PDF ============
+   Lee un PDF de "HORARIO DE CLASES" y rellena ramos, horario e información.
+   El archivo se procesa completo en el teléfono y se descarta al terminar:
+   nunca se sube ni se guarda. */
+
+const PDFJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+function cargarPdfJs(){
+  return new Promise((resolve, reject)=>{
+    if(window.pdfjsLib) return resolve(window.pdfjsLib);
+    const tag = document.createElement('script');
+    tag.src = PDFJS_URL;
+    tag.onload = ()=>{
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+      resolve(window.pdfjsLib);
+    };
+    tag.onerror = ()=> reject(new Error('sin-conexion'));
+    document.head.appendChild(tag);
+  });
+}
+
+const PDF_DIA_LETRA = {L:'Lunes', M:'Martes', W:'Miércoles', J:'Jueves', V:'Viernes', S:'Sábado'};
+const PDF_DIA_HEADER = {
+  'LUNES':'Lunes','MARTES':'Martes','MIÉRCOLES':'Miércoles','MIERCOLES':'Miércoles',
+  'JUEVES':'Jueves','VIERNES':'Viernes','SÁBADO':'Sábado','SABADO':'Sábado'
+};
+const RE_PDF_CELDA  = /(\d{4,6}-\d)-([A-Z]+-\d+)/;
+const RE_PDF_CODIGO = /^\d{4,6}-\d$/;
+const RE_PDF_COORD  = /^[A-Z]+-\d+$/;
+const RE_PDF_HORA   = /^\d{1,2}:\d{2}$/;
+
+/* Extrae los fragmentos de texto con su posición, descartando las marcas de
+   agua ("HORARIO SUJETO A MODIFICACIONES", el RUT): van en cuerpo grande y
+   sus letras se entremezclan con las del texto real. */
+async function leerFragmentos(file){
+  const pdfjs = await cargarPdfJs();
+  const buffer = await file.arrayBuffer();
+  const doc = await pdfjs.getDocument({data:buffer}).promise;
+  const page = await doc.getPage(1);
+  const viewport = page.getViewport({scale:1});
+  const contenido = await page.getTextContent();
+
+  const items = [];
+  for(const it of contenido.items){
+    const txt = (it.str||'').trim();
+    if(!txt) continue;
+    const m = pdfjs.Util.transform(viewport.transform, it.transform);
+    const alto = Math.hypot(m[2], m[3]);
+    if(alto > 14) continue;                       // marca de agua
+    items.push({texto:txt, x:m[4], top:m[5], ancho:it.width||0});
+  }
+  await doc.destroy();
+  return items;
+}
+
+function agruparFilas(items, tol){
+  const filas = [];
+  for(const it of items.slice().sort((a,b)=> a.top-b.top || a.x-b.x)){
+    const f = filas.find(f=> Math.abs(f.top - it.top) <= tol);
+    if(f) f.items.push(it);
+    else filas.push({top:it.top, items:[it]});
+  }
+  return filas;
+}
+
+function parsearHorarioPdf(items){
+  // Cabecera de la grilla (fila con LUNES, MARTES, ...)
+  const cabDias = items.filter(i=> PDF_DIA_HEADER[i.texto.toUpperCase()]);
+  const cabCodigo = items.find(i=> i.texto.toUpperCase()==='CODIGO');
+  if(!cabDias.length || !cabCodigo) throw new Error('formato');
+
+  const yGrilla = Math.min(...cabDias.map(i=>i.top));
+  const columnas = cabDias
+    .filter(i=> Math.abs(i.top - yGrilla) < 4)
+    .map(i=> ({dia:PDF_DIA_HEADER[i.texto.toUpperCase()], cx:i.x + i.ancho/2}))
+    .sort((a,b)=> a.cx-b.cx);
+
+  // --- Tabla de asignaturas ---
+  const asignaturas = [];
+  const filasTabla = agruparFilas(
+    items.filter(i=> i.top > cabCodigo.top + 6 && i.top < yGrilla - 6), 4);
+  for(const fila of filasTabla){
+    const ws = fila.items.slice().sort((a,b)=> a.x-b.x);
+    let codigo=null, coord=null, tipo=null, horario=null;
+    const nombre = [];
+    for(const w of ws){
+      const t = w.texto, x = w.x;
+      if(x < 48) continue;
+      else if(x < 95 && RE_PDF_CODIGO.test(t)) codigo = t;
+      else if(x < 440) nombre.push(t);
+      else if(RE_PDF_COORD.test(t)) coord = t;
+      else if(x < 500 && t.length===1) tipo = t;
+      else if(x < 530) continue;
+      else horario = t;
+    }
+    if(codigo && horario){
+      asignaturas.push({codigo, nombre:nombre.join(' '), coord, tipo:tipo||'T', horario});
+    }
+  }
+  if(!asignaturas.length) throw new Error('formato');
+
+  // --- Filas de bloque y sus horas ---
+  const bloquesY = {};
+  items.forEach(i=>{
+    if(i.top > yGrilla && i.x < 48 && /^\d+$/.test(i.texto)) bloquesY[+i.texto] = i.top;
+  });
+  const cercano = (top)=>{
+    let mejor=null, dist=Infinity;
+    for(const n in bloquesY){
+      const d = Math.abs(bloquesY[n]-top);
+      if(d < dist){ dist=d; mejor=+n; }
+    }
+    return {n:mejor, dist};
+  };
+
+  const horasPdf = {};
+  for(const fila of agruparFilas(items.filter(i=> i.top>yGrilla && i.x>48 && i.x<115), 4)){
+    const horas = fila.items.slice().sort((a,b)=>a.x-b.x)
+      .map(i=>i.texto).join(' ').match(/\d{1,2}:\d{2}/g) || [];
+    const c = cercano(fila.top);
+    if(horas.length>=2 && c.n && c.dist<12){
+      horasPdf[c.n] = {inicio:horas[0], fin:horas[1]};
+    }
+  }
+
+  // --- Celdas de la grilla: código-coord + sala ---
+  const buckets = {};
+  for(const i of items){
+    if(i.top <= yGrilla || i.x < 170) continue;
+    const c = cercano(i.top);
+    if(!c.n || c.dist > 16) continue;
+    const cx = i.x + i.ancho/2;
+    let dia = columnas[0].dia, mejor = Infinity;
+    for(const col of columnas){
+      const d = Math.abs(col.cx - cx);
+      if(d < mejor){ mejor = d; dia = col.dia; }
+    }
+    const clave = dia+'-'+c.n;
+    buckets[clave] = (buckets[clave] ? buckets[clave]+' ' : '') + i.texto;
+  }
+
+  const celdas = {};
+  for(const clave in buckets){
+    const texto = buckets[clave];
+    const m = texto.match(RE_PDF_CELDA);
+    if(!m) continue;
+    const sala = texto.match(/Sala:\s*([A-Za-zÑ]{1,5}\d{2,4})/);
+    celdas[clave] = {codigo:m[1], coord:m[2], sala: sala ? sala[1] : ''};
+  }
+
+  return {asignaturas, celdas, horasPdf, dias:columnas.map(c=>c.dia)};
+}
+
+/* Unifica por código: un ramo con varias sesiones, aunque el PDF lo liste
+   dos veces (una fila de teoría y otra de laboratorio). */
+function construirRamosDesdePdf(datos){
+  const porCodigo = {};
+  for(const a of datos.asignaturas){
+    if(!porCodigo[a.codigo]){
+      porCodigo[a.codigo] = {nombre:a.nombre, seccion:'', seccionLab:'', sesiones:[]};
+    }
+    const r = porCodigo[a.codigo];
+    if(a.tipo==='T' && !r.seccion) r.seccion = a.coord || '';
+    if(a.tipo==='L' && !r.seccionLab) r.seccionLab = a.coord || '';
+
+    const pares = a.horario.match(/[A-Z]\d/g) || [];
+    for(const par of pares){
+      const dia = PDF_DIA_LETRA[par[0]];
+      if(!dia) continue;
+      const bloque = parseInt(par[1], 10);
+      const celda = datos.celdas[dia+'-'+bloque];
+      const coincide = celda && celda.codigo===a.codigo && celda.coord===a.coord;
+      r.sesiones.push({
+        dia, bloque:String(bloque), tipo:a.tipo,
+        ubicacion: coincide ? celda.sala : ''
+      });
+    }
+  }
+
+  return Object.keys(porCodigo).map(cod=>{
+    const r = porCodigo[cod];
+    if(!r.seccion && r.seccionLab) r.seccion = r.seccionLab;
+    const orden = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    r.sesiones.sort((a,b)=> orden.indexOf(a.dia)-orden.indexOf(b.dia) || a.bloque-b.bloque);
+    return {
+      id:uid(), nombre:r.nombre, evaluaciones:[], gruposEval:[],
+      nSemana:r.sesiones.length, sesiones:r.sesiones,
+      profesor:'', seccion:r.seccion, seccionLab:r.seccionLab,
+      separarLab:false, evaluacionesLab:[], gruposEvalLab:[],
+      ponderacionTeoria:50, ponderacionLab:50
+    };
+  });
+}
+
+async function importarHorarioPdf(file){
+  toast('Leyendo el PDF…');
+  let nuevos, datos;
+  try{
+    datos = parsearHorarioPdf(await leerFragmentos(file));
+    nuevos = construirRamosDesdePdf(datos);
+  }catch(err){
+    toast(err.message==='sin-conexion'
+      ? 'Necesitas conexión la primera vez que importas un PDF'
+      : 'No pude leer este horario');
+    return;
+  }
+  if(!nuevos.length){ toast('No encontré ramos en el PDF'); return; }
+
+  const avisos = [];
+
+  // Sábado: se activa solo si el PDF trae clases ese día
+  const usaSabado = nuevos.some(r=> r.sesiones.some(s=> s.dia==='Sábado'));
+  if(usaSabado && !state.config.sabado){
+    state.config.sabado = true;
+    avisos.push('se activó el sábado');
+  }
+
+  // Bloques: si el PDF usa más de los configurados, se amplía con sus horas
+  let maxBloque = 0;
+  nuevos.forEach(r=> r.sesiones.forEach(s=> {
+    maxBloque = Math.max(maxBloque, parseInt(s.bloque,10));
+  }));
+  if(maxBloque > state.config.bloques.length){
+    const antes = state.config.bloques.length;
+    for(let n = antes+1; n <= maxBloque; n++){
+      const h = datos.horasPdf[n];
+      state.config.bloques.push(h ? {inicio:h.inicio, fin:h.fin} : {inicio:'00:00', fin:'00:00'});
+    }
+    avisos.push(`se agregaron bloques hasta el ${maxBloque}`);
+  }
+  persistConfig();
+
+  // Los ramos se agregan sin tocar los que ya existen
+  state.ramos = state.ramos.concat(nuevos);
+  persist();
+
+  const repetidos = nuevos.filter(n=>
+    state.ramos.filter(r=> r.nombre===n.nombre).length > 1).length;
+  if(repetidos) avisos.push(`${repetidos} ya existían, revisa si quieres borrar alguno`);
+
+  state.settingsOpen = false;
+  state.view = 'list';
+  render();
+  toast(`${nuevos.length} ramos importados` + (avisos.length ? ' · '+avisos.join(' · ') : ''));
+}
+
+function attachConfigHorarioEvents(){
+  const panel = document.getElementById('toggleCfgPanel');
+  if(panel) panel.onclick = ()=>{ state.configOpen = !state.configOpen; render(); };
+  if(!state.configOpen) return;
+
+  const guardar = ()=>{ persistConfig(); render(); };
+
+  document.querySelectorAll('[data-cfgini]').forEach(inp=>{
+    inp.onchange = ()=>{
+      state.config.bloques[+inp.dataset.cfgini].inicio = inp.value || '00:00';
+      guardar();
+    };
+  });
+  document.querySelectorAll('[data-cfgfin]').forEach(inp=>{
+    inp.onchange = ()=>{
+      state.config.bloques[+inp.dataset.cfgfin].fin = inp.value || '00:00';
+      guardar();
+    };
+  });
+
+  document.querySelectorAll('[data-cfgdel]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const i = +btn.dataset.cfgdel;
+      if(state.config.bloques.length<=1){ toast('Debe quedar al menos un bloque'); return; }
+      const n = i+1;
+      const huerfanas = contarSesionesEnBloque(n);
+      if(!confirm(`¿Eliminar el bloque ${n}?`)) return;
+      state.config.bloques.splice(i,1);
+      state.config.descansos = (state.config.descansos||[])
+        .filter(d=> Number(d.despues)!==n)
+        .map(d=> Number(d.despues)>n ? {...d, despues:Number(d.despues)-1} : d);
+      persistConfig();
+      if(huerfanas) toast(`${huerfanas} clase(s) quedaron sin bloque; revísalas en Editar ramos`);
+      render();
+    };
+  });
+
+  const add = document.getElementById('cfgAddBloque');
+  if(add) add.onclick = ()=>{
+    const ultimo = state.config.bloques[state.config.bloques.length-1];
+    const finMin = toMin(ultimo.fin);
+    const dur = Math.max(toMin(ultimo.fin) - toMin(ultimo.inicio), 30);
+    const ini = finMin + 30, fin = ini + dur;
+    const fmt = m => `${String(Math.floor((m%1440)/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+    state.config.bloques.push({inicio:fmt(ini), fin:fmt(fin)});
+    guardar();
+  };
+
+  document.querySelectorAll('[data-cfgdesc]').forEach(t=>{
+    t.onclick = ()=>{
+      const n = Number(t.dataset.cfgdesc);
+      state.config.descansos = state.config.descansos || [];
+      if(getDescanso(n)){
+        state.config.descansos = state.config.descansos.filter(d=> Number(d.despues)!==n);
+      } else {
+        state.config.descansos.push({despues:n, nombre:'Descanso'});
+      }
+      guardar();
+    };
+  });
+  document.querySelectorAll('[data-cfgdescnombre]').forEach(inp=>{
+    inp.onblur = ()=>{
+      const d = getDescanso(Number(inp.dataset.cfgdescnombre));
+      if(d){ d.nombre = inp.value.trim() || 'Descanso'; guardar(); }
+    };
+  });
+
+  const sab = document.getElementById('toggleSabado');
+  if(sab) sab.onclick = ()=>{
+    if(state.config.sabado){
+      const enSabado = state.ramos.reduce((acc,r)=>
+        acc + (r.sesiones||[]).filter(s=>s.dia==='Sábado').length, 0);
+      if(enSabado) toast(`${enSabado} clase(s) del sábado dejarán de verse en la grilla`);
+    }
+    state.config.sabado = !state.config.sabado;
+    guardar();
+  };
+
+  const reset = document.getElementById('cfgReset');
+  if(reset) reset.onclick = ()=>{
+    if(!confirm('¿Volver a los 6 bloques por defecto?')) return;
+    state.config = JSON.parse(JSON.stringify(CONFIG_DEFAULT));
+    guardar();
+  };
+}
+
+function contarSesionesEnBloque(n){
+  return state.ramos.reduce((acc,r)=>
+    acc + (r.sesiones||[]).filter(s=> Number(s.bloque)>=n).length, 0);
+}
+
+function renderConfigHorario(){
+  const filas = state.config.bloques.map((b,i)=>{
+    const n = i+1;
+    const desc = getDescanso(n);
+    return `
+      <div class="cfg-bloque">
+        <span class="cfg-n">${n}</span>
+        <input type="time" value="${hhmm(b.inicio)}" data-cfgini="${i}">
+        <span class="cfg-sep">–</span>
+        <input type="time" value="${hhmm(b.fin)}" data-cfgfin="${i}">
+        <div class="cfg-x" data-cfgdel="${i}">✕</div>
+      </div>
+      <div class="cfg-desc ${desc?'':'cfg-desc-off'}">
+        ${desc
+          ? `<input type="text" value="${escapeHtml(desc.nombre||'')}" data-cfgdescnombre="${n}" placeholder="Nombre del descanso">`
+          : `<span class="cfg-desc-label">Descanso después del ${n}</span>`}
+        <div class="switch-toggle" data-cfgdesc="${n}" data-on="${desc?'1':'0'}"></div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="cfg-lista">${filas}</div>
+    <button class="btn-ghost" id="cfgAddBloque" style="width:100%;">+ Agregar bloque</button>
+    <div style="height:8px;"></div>
+    <div class="switch-row" style="margin-bottom:10px;">
+      <div class="switch-label">
+        <div class="switch-title">Mostrar sábado</div>
+        <div class="switch-sub">Se activa solo si importas un horario con clases ese día</div>
+      </div>
+      <div class="switch-toggle" id="toggleSabado" data-on="${state.config.sabado?'1':'0'}"></div>
+    </div>
+    <button class="btn-ghost" id="cfgReset" style="width:100%;">Restablecer valores por defecto</button>
   `;
 }
 
@@ -1581,12 +2051,17 @@ function attachInicioEvents(){
   attachSwipeTercio(document.getElementById('tercioPrueba'), 'prueba');
   const gearBtn = document.getElementById('gearBtn');
   const overlay = document.getElementById('settingsOverlay');
-  gearBtn.onclick = ()=> overlay.classList.add('show');
-  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.classList.remove('show'); };
-  document.getElementById('settingsClose').onclick = ()=> overlay.classList.remove('show');
+  const cerrarSettings = ()=>{ state.settingsOpen=false; overlay.classList.remove('show'); };
+  // El panel se re-dibuja al editar, así que hay que reabrirlo tras cada render
+  if(state.settingsOpen) overlay.classList.add('show');
+  gearBtn.onclick = ()=>{ state.settingsOpen=true; overlay.classList.add('show'); };
+  overlay.onclick = (e)=>{ if(e.target===overlay) cerrarSettings(); };
+  document.getElementById('settingsClose').onclick = cerrarSettings;
+
+  attachConfigHorarioEvents();
 
   document.getElementById('exportBtn').onclick = ()=>{
-    const dataStr = JSON.stringify(state.ramos, null, 2);
+    const dataStr = JSON.stringify({ramos:state.ramos, config:state.config}, null, 2);
     const blob = new Blob([dataStr], {type:'application/json'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1594,6 +2069,14 @@ function attachInicioEvents(){
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast('Datos exportados');
+  };
+
+  const pdfInput = document.getElementById('importPdfFile');
+  document.getElementById('importPdfBtn').onclick = ()=> pdfInput.click();
+  pdfInput.onchange = (e)=>{
+    const file = e.target.files[0];
+    pdfInput.value = '';
+    if(file) importarHorarioPdf(file);
   };
 
   const fileInput = document.getElementById('importFile');
@@ -1605,8 +2088,20 @@ function attachInicioEvents(){
     reader.onload = (ev)=>{
       try{
         const parsed = JSON.parse(ev.target.result);
-        if(!Array.isArray(parsed)) throw new Error('formato inválido');
-        state.ramos = parsed;
+        // Respaldos antiguos eran solo el arreglo de ramos
+        if(Array.isArray(parsed)){
+          state.ramos = parsed;
+        } else if(parsed && Array.isArray(parsed.ramos)){
+          state.ramos = parsed.ramos;
+          if(parsed.config && Array.isArray(parsed.config.bloques) && parsed.config.bloques.length){
+            state.config = {
+              bloques: parsed.config.bloques,
+              descansos: parsed.config.descansos || [],
+              sabado: !!parsed.config.sabado
+            };
+            persistConfig();
+          }
+        } else throw new Error('formato inválido');
         persist();
         toast('Datos importados correctamente');
         overlay.classList.remove('show');
@@ -2136,6 +2631,8 @@ function attachEvents(){
       const r = getRamo();
       r.profesor = document.getElementById('profInput').value.trim();
       r.seccion = document.getElementById('seccInput').value.trim();
+      const seccLab = document.getElementById('seccLabInput');
+      if(seccLab) r.seccionLab = seccLab.value.trim();
       persist(); toast('Información guardada'); state.view='detail'; render();
     };
   }
