@@ -559,7 +559,8 @@ const CONFIG_DEFAULT = {
   ],
   descansos: [{despues:3, nombre:'Almuerzo'}],
   sabado: false,
-  celebraciones: ['confeti','fuegos','globos','estrellas']
+  celebraciones: ['confeti','fuegos','globos','estrellas'],
+  celebracionAuto: true
 };
 function cargarConfig(){
   try{
@@ -571,7 +572,8 @@ function cargarConfig(){
         sabado: !!guardada.sabado,
         celebraciones: (Array.isArray(guardada.celebraciones) && guardada.celebraciones.length)
           ? guardada.celebraciones
-          : CONFIG_DEFAULT.celebraciones.slice()
+          : CONFIG_DEFAULT.celebraciones.slice(),
+        celebracionAuto: guardada.celebracionAuto !== false
       };
     }
   }catch(e){}
@@ -1481,6 +1483,37 @@ function promPonderado(arr){
   return sumW>0 ? (sumWN/sumW) : null;
 }
 
+/* Nota definitiva en el peor caso: las evaluaciones pendientes se cuentan
+   como 1,0. Si aun así llega a 3,95 el ramo ya está aprobado. */
+function promedioAsegurado(evals){
+  let total=0, peso=0;
+  (evals||[]).forEach(e=>{
+    if(e.excluida) return;
+    const w = (parseFloat(e.porcentaje)||0)/100;
+    if(w<=0) return;
+    const n = parseFloat(String(e.nota).replace(',', '.'));
+    const tiene = !isNaN(n) && e.nota!=='' && e.nota!=='-';
+    total += (tiene ? n : 1) * w;
+    peso += w;
+  });
+  return peso>0 ? (total/peso) : null;
+}
+function seccionAprobada(evals){
+  const p = promedioAsegurado(evals);
+  return p!==null && p >= APROBACION;
+}
+function ramoAprobado(r){
+  if(r.separarLab){
+    const t = promedioAsegurado(r.evaluaciones);
+    const l = promedioAsegurado(r.evaluacionesLab);
+    if(t===null && l===null) return false;
+    const pT = parseFloat(r.ponderacionTeoria) || 0;
+    const pL = parseFloat(r.ponderacionLab) || 0;
+    return ((t===null?1:t)*pT + (l===null?1:l)*pL)/100 >= APROBACION;
+  }
+  return seccionAprobada(r.evaluaciones);
+}
+
 function renderPromedio(){
   state.ramos.forEach(r=>{ r.gruposEval = r.gruposEval || []; aplicarDescartePeorNota(r); });
   const cards = state.ramos.map(r=>{
@@ -1536,6 +1569,9 @@ function buildEvalLinesData(evals){
 /* Línea de cierre de la tarjeta: mientras queden notas pendientes muestra la
    nota necesaria; cuando ya están todas, el estado final (aprobado/reprobado). */
 function lineaCierre(evals){
+  if(seccionAprobada(evals)){
+    return `<div class="hor-line linea-cierre aprobado" data-confeti="1">Aprobado</div>`;
+  }
   const necesaria = calcNotaNecesaria(evals);
   if(necesaria!==null){
     const txt = necesaria>7 ? 'No alcanza (necesitas más de 7,0)' : formatNota(necesaria);
@@ -1779,7 +1815,7 @@ function buildPromedioCarouselHTML(r){
   const pL = parseFloat(r.ponderacionLab) || 0;
   const combinado = (promT!==null || promL!==null) ? ((promT||0)*pT + (promL||0)*pL) / 100 : null;
   const completo = calcNotaNecesaria(evalsT)===null && calcNotaNecesaria(evalsL)===null && combinado!==null;
-  const aprobadoFinal = completo && combinado >= APROBACION;
+  const aprobadoFinal = ramoAprobado(r);
 
   return `
     <div class="prom-carousel-wrap">
@@ -1799,7 +1835,9 @@ function buildPromedioCarouselHTML(r){
           <div class="hor-line">Teoría (${pT}%): ${promT!==null?formatNota(promT):'-'}</div>
           <div class="hor-line">Laboratorio (${pL}%): ${promL!==null?formatNota(promL):'-'}</div>
           <div class="hor-line" style="margin-top:12px;font-weight:700;color:var(--accent-dark);">Promedio final: ${combinado!==null?formatNota(combinado):'-'}</div>
-          ${completo ? `<div class="hor-line linea-cierre ${aprobadoFinal?'aprobado':'reprobado'}"${aprobadoFinal?' data-confeti="1"':''}>${aprobadoFinal?'Aprobado':'Reprobado'}</div>` : ''}
+          ${aprobadoFinal
+            ? `<div class="hor-line linea-cierre aprobado" data-confeti="1">Aprobado</div>`
+            : (completo ? `<div class="hor-line linea-cierre reprobado">Reprobado</div>` : '')}
         </div>
       </div>
       <div class="prom-dots">
@@ -1830,6 +1868,8 @@ function attachPromedioEvents(){
       // El estado "Aprobado" lanza una celebración al azar al tocarlo
       dyn.querySelectorAll('[data-confeti]').forEach(el=> el.onclick = celebrar);
       document.getElementById('promOverlay').classList.add('show');
+      // Y si el ramo ya está aprobado, sale sola al abrirlo
+      if(state.config.celebracionAuto && ramoAprobado(r)) celebrar();
     };
   });
   const overlay = document.getElementById('promOverlay');
@@ -2028,8 +2068,14 @@ function renderInicio(){
         </div>
 
         <div class="cfg-sec">
-          <div class="switch-title">Celebración al aprobar</div>
-          <div class="switch-sub">Toca las que quieras; si eliges varias sale una al azar</div>
+          <div class="switch-row" style="margin-bottom:0;">
+            <div class="switch-label">
+              <div class="switch-title">Celebración al aprobar</div>
+              <div class="switch-sub">Se lanza sola al abrir un ramo aprobado</div>
+            </div>
+            <div class="switch-toggle" id="toggleCelebAuto" data-on="${state.config.celebracionAuto?'1':'0'}"></div>
+          </div>
+          <div class="switch-sub" style="margin-top:10px;">Toca las que quieras; si eliges varias sale una al azar</div>
           ${renderCelebracionChips()}
         </div>
       </div>
@@ -2054,6 +2100,11 @@ function renderCelebracionChips(){
   return `<div class="celeb-chips">${chips}<div class="celeb-chip" data-celeb="todas" data-on="${todas?'1':'0'}">Aleatorio</div></div>`;
 }
 function attachCelebracionEvents(){
+  const auto = document.getElementById('toggleCelebAuto');
+  if(auto) auto.onclick = ()=>{
+    state.config.celebracionAuto = !state.config.celebracionAuto;
+    persistConfig(); render();
+  };
   document.querySelectorAll('[data-celeb]').forEach(chip=>{
     chip.onclick = ()=>{
       const k = chip.dataset.celeb;
@@ -2517,7 +2568,8 @@ function attachInicioEvents(){
               sabado: !!parsed.config.sabado,
               celebraciones: (Array.isArray(parsed.config.celebraciones) && parsed.config.celebraciones.length)
                 ? parsed.config.celebraciones
-                : celebracionesActivas()
+                : celebracionesActivas(),
+              celebracionAuto: parsed.config.celebracionAuto !== false
             };
             persistConfig();
           }
