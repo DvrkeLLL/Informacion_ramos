@@ -503,6 +503,16 @@
   .cfg-desc-off input{visibility:hidden;}
   .cfg-desc-label{font-size:11px;color:var(--ink-soft);flex:1;}
 
+  .celeb-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+  .celeb-chip{
+    padding:9px 13px;border-radius:999px;border:1.5px solid var(--border);
+    background:transparent;color:var(--ink-soft);cursor:pointer;
+    font-family:var(--font-display);font-weight:700;font-size:12px;
+  }
+  .celeb-chip[data-on="1"]{
+    background:var(--accent-wash);border-color:var(--accent);color:var(--accent-dark);
+  }
+
   .gear-btn{
     position:absolute;top:20px;right:18px;width:36px;height:36px;border-radius:12px;
     background:var(--card);border:1px solid var(--border);
@@ -548,7 +558,8 @@ const CONFIG_DEFAULT = {
     {inicio:'16:55', fin:'18:15'},
   ],
   descansos: [{despues:3, nombre:'Almuerzo'}],
-  sabado: false
+  sabado: false,
+  celebraciones: ['confeti','fuegos','globos','estrellas']
 };
 function cargarConfig(){
   try{
@@ -557,7 +568,10 @@ function cargarConfig(){
       return {
         bloques: guardada.bloques,
         descansos: Array.isArray(guardada.descansos) ? guardada.descansos : [],
-        sabado: !!guardada.sabado
+        sabado: !!guardada.sabado,
+        celebraciones: (Array.isArray(guardada.celebraciones) && guardada.celebraciones.length)
+          ? guardada.celebraciones
+          : CONFIG_DEFAULT.celebraciones.slice()
       };
     }
   }catch(e){}
@@ -850,8 +864,8 @@ function renderDetail(){
       </div>
       <div class="section-btn" data-go="info">
         <div>
-          <div class="label">Información Ramo</div>
-          <div class="status ${(r.profesor||r.seccion||r.correo)?'ok':''}">${r.profesor ? escapeHtml(r.profesor) + (r.correo ? ' · '+escapeHtml(r.correo) : '') : 'Profesor, sección y correo'}</div>
+          <div class="label">Información del ramo</div>
+          <div class="status ${(r.profesor||r.seccion||r.correo)?'ok':''}">${r.profesor ? escapeHtml(r.profesor) : 'Profesor, sección y correo'}</div>
         </div>
         <div class="chev">${ICONS.chev}</div>
       </div>
@@ -1097,7 +1111,7 @@ function renderInfo(){
   return `
     <div class="topbar">
       <div class="back" data-back="detail">${ICONS.back}</div>
-      <h2>Información Ramo</h2>
+      <h2>Información del ramo</h2>
     </div>
     <div class="inline-form">
       <label>Nombre del profesor</label>
@@ -1697,11 +1711,18 @@ function celebracionEstrellas(){
   });
 }
 
-const CELEBRACIONES = [celebracionConfeti, celebracionFuegos, celebracionGlobos, celebracionEstrellas];
+const CELEBRACIONES = {
+  confeti: celebracionConfeti,
+  fuegos: celebracionFuegos,
+  globos: celebracionGlobos,
+  estrellas: celebracionEstrellas
+};
 
-/* Se elige una al azar en cada toque */
+/* Se elige al azar entre las celebraciones activadas en Configuración */
 function celebrar(){
-  CELEBRACIONES[Math.floor(Math.random()*CELEBRACIONES.length)]();
+  const activas = celebracionesActivas();
+  const clave = activas[Math.floor(Math.random()*activas.length)];
+  (CELEBRACIONES[clave] || celebracionConfeti)();
 }
 
 function buildPromedioSimpleHTML(r){
@@ -1955,8 +1976,10 @@ function renderInicio(){
         <button class="btn-ghost btn-icono" id="importBtn" style="width:100%;">${ICONS.recuperar}<span>Recuperar información<small>Desde un archivo guardado</small></span></button>
         <input type="file" id="importFile" accept="application/json" style="display:none;">
         <div style="height:10px;"></div>
-        <button class="btn-ghost btn-icono" id="importPdfBtn" style="width:100%;">${ICONS.pdf}<span>Rellenar con mi horario de la U<small>El PDF solo se lee, no se guarda</small></span></button>
-        <input type="file" id="importPdfFile" accept="application/pdf" style="display:none;">
+        <div class="cfg-sec">
+          <button class="btn-ghost btn-icono" id="importPdfBtn" style="width:100%;">${ICONS.pdf}<span>Subir horario<small>Rellena información automáticamente, sube tu PDF</small></span></button>
+          <input type="file" id="importPdfFile" accept="application/pdf" style="display:none;">
+        </div>
 
         <div class="cfg-sec">
           <div class="switch-row" style="margin-bottom:0;">
@@ -1968,9 +1991,48 @@ function renderInicio(){
           </div>
           ${state.configOpen ? renderConfigHorario() : ''}
         </div>
+
+        <div class="cfg-sec">
+          <div class="switch-title">Celebración al aprobar</div>
+          <div class="switch-sub">Toca las que quieras; si eliges varias sale una al azar</div>
+          ${renderCelebracionChips()}
+        </div>
       </div>
     </div>
   `;
+}
+
+const CELEBRACION_NOMBRES = {
+  confeti:'Confeti', fuegos:'Fuegos artificiales',
+  globos:'Globos', estrellas:'Estrellas'
+};
+function celebracionesActivas(){
+  const c = (state.config.celebraciones||[]).filter(k=> CELEBRACION_NOMBRES[k]);
+  return c.length ? c : CONFIG_DEFAULT.celebraciones.slice();
+}
+function renderCelebracionChips(){
+  const activas = celebracionesActivas();
+  const todas = activas.length === Object.keys(CELEBRACION_NOMBRES).length;
+  const chips = Object.keys(CELEBRACION_NOMBRES).map(k=>
+    `<div class="celeb-chip" data-celeb="${k}" data-on="${activas.includes(k)?'1':'0'}">${CELEBRACION_NOMBRES[k]}</div>`
+  ).join('');
+  return `<div class="celeb-chips">${chips}<div class="celeb-chip" data-celeb="todas" data-on="${todas?'1':'0'}">Aleatorio</div></div>`;
+}
+function attachCelebracionEvents(){
+  document.querySelectorAll('[data-celeb]').forEach(chip=>{
+    chip.onclick = ()=>{
+      const k = chip.dataset.celeb;
+      if(k==='todas'){
+        state.config.celebraciones = Object.keys(CELEBRACION_NOMBRES);
+      } else {
+        const activas = celebracionesActivas();
+        const nuevas = activas.includes(k) ? activas.filter(x=>x!==k) : activas.concat([k]);
+        if(!nuevas.length){ toast('Deja al menos una celebración'); return; }
+        state.config.celebraciones = nuevas;
+      }
+      persistConfig(); render();
+    };
+  });
 }
 
 /* ============ IMPORTAR HORARIO DESDE PDF ============
@@ -2378,6 +2440,7 @@ function attachInicioEvents(){
   document.getElementById('settingsClose').onclick = cerrarSettings;
 
   attachConfigHorarioEvents();
+  attachCelebracionEvents();
 
   document.getElementById('exportBtn').onclick = ()=>{
     const dataStr = JSON.stringify({ramos:state.ramos, config:state.config}, null, 2);
@@ -2416,7 +2479,10 @@ function attachInicioEvents(){
             state.config = {
               bloques: parsed.config.bloques,
               descansos: parsed.config.descansos || [],
-              sabado: !!parsed.config.sabado
+              sabado: !!parsed.config.sabado,
+              celebraciones: (Array.isArray(parsed.config.celebraciones) && parsed.config.celebraciones.length)
+                ? parsed.config.celebraciones
+                : celebracionesActivas()
             };
             persistConfig();
           }
