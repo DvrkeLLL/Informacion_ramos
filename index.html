@@ -372,7 +372,13 @@
   .hor-line{font-size:13.5px;margin-bottom:8px;color:var(--ink);}
   .hor-line b{color:var(--ink-soft);font-family:var(--font-display);font-weight:700;font-size:12px;}
   #hoHorario{font-weight:700;font-family:var(--font-display);color:var(--accent-dark);margin-bottom:14px;}
+  #hoCorreo a{color:var(--accent-dark);text-decoration:none;font-weight:600;word-break:break-all;}
   .linea-excluida{text-decoration:line-through;color:var(--ink-soft) !important;opacity:0.65;}
+
+  /* Línea de cierre de la tarjeta de promedio (nota necesaria / estado final) */
+  .linea-cierre{margin-top:12px;font-weight:700;color:var(--accent-dark);}
+  .linea-cierre.aprobado{cursor:pointer;}
+  .linea-cierre.reprobado{color:var(--danger);}
 
   .eval-seccion{margin-bottom:8px;}
   .eval-seccion-title{
@@ -431,7 +437,14 @@
   .cal-day.empty{cursor:default;}
   .cal-day-green{background:var(--pastel-green-bg);color:var(--pastel-green-ink);}
   .cal-day-orange{background:var(--pastel-orange-bg);color:var(--pastel-orange-ink);}
-  .cal-day-today{background:var(--pastel-yellow-bg);color:var(--pastel-yellow-ink);border-radius:50%;}
+  /* El día de hoy ya no pinta toda la celda: es un círculo más chico que se
+     superpone al fondo verde/naranjo de las pruebas de ese día. */
+  .cal-day-today .cal-num{color:var(--pastel-yellow-ink);}
+  .cal-hoy-mark{
+    position:absolute;width:68%;height:68%;border-radius:50%;
+    background:var(--pastel-yellow-bg);
+  }
+  .cal-num{position:relative;z-index:1;}
   .cal-day.static{cursor:default;}
 
   /* ---------- INICIO ---------- */
@@ -595,6 +608,9 @@ const DIA_HEADER = {Lunes:'L',Martes:'Ma',Miércoles:'Mi',Jueves:'J',Viernes:'V'
 const DIA_INICIAL = {Lunes:'L',Martes:'M',Miércoles:'W',Jueves:'J',Viernes:'V',Sábado:'S'};
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
+/* Nota mínima de aprobación: se aprueba con promedio final >= 3,95 */
+const APROBACION = 3.95;
+
 function persist(){ localStorage.setItem('ramos_v1', JSON.stringify(state.ramos)); }
 function getRamo(){ return state.ramos.find(r=>r.id===state.ramoId); }
 function toast(msg){
@@ -619,8 +635,8 @@ function getEvalSet(r, target){
 
 /* Al agregar una evaluación nueva a un grupo, si la primera fila del grupo
    ya tiene nombre, las siguientes se numeran solas a partir de ese nombre
-   (Control -> Control 1, Control 2...). Solo ocurre al presionar el botón
-   de agregar; editar los nombres a mano después no la vuelve a disparar. */
+   (Control -> Control 1, Control 2...). El texto queda como escrito a mano
+   (sin cursiva); tipoAuto solo sirve para poder renumerarlas después. */
 function agregarEvalAGrupo(set, grupo){
   const filas = grupo.rowIds.map(id=> set.arr.find(e=>e.id===id)).filter(Boolean);
   const primero = filas[0];
@@ -632,7 +648,7 @@ function agregarEvalAGrupo(set, grupo){
     if(m){ base = m[1].trim(); numPrimero = parseInt(m[2],10); }
     else { base = raw; numPrimero = 1; primero.tipo = `${base} 1`; primero.tipoSuggested = false; }
     const nuevoNum = numPrimero + filas.length;
-    nuevaFila = {id:uid(), tipo:`${base} ${nuevoNum}`, tipoSuggested:true, nota:'', porcentaje:'', fecha:'', hora:'', sala:'', excluida:false};
+    nuevaFila = {id:uid(), tipo:`${base} ${nuevoNum}`, tipoSuggested:false, tipoAuto:true, nota:'', porcentaje:'', fecha:'', hora:'', sala:'', excluida:false};
   } else {
     nuevaFila = {id:uid(), tipo:'', nota:'', porcentaje:'', fecha:'', hora:'', sala:'', excluida:false};
   }
@@ -640,22 +656,33 @@ function agregarEvalAGrupo(set, grupo){
   grupo.rowIds.push(nuevaFila.id);
 }
 
-/* Recalcula, para cada grupo con "descartarPeor" activo, cuál es actualmente
-   la peor nota (se actualiza sola si cambian las notas) y, si "repartir" está
-   activo, reparte el porcentaje total entre las filas que sí cuentan. */
+/* Descartar nota dentro de un grupo:
+   - Mientras falte alguna nota, se descarta la ÚLTIMA fila pendiente, así el
+     promedio parcial ya asume que esa evaluación no contará.
+   - Cuando todas tienen nota, se descarta la peor real.
+   Si "repartir" está activo, el porcentaje total se divide entre las que cuentan. */
 function aplicarDescartePeorNotaSet(evaluaciones, grupos){
   (grupos||[]).forEach(grupo=>{
     const filas = grupo.rowIds.map(id=> evaluaciones.find(e=>e.id===id)).filter(Boolean);
     if(!grupo.descartarPeor){
       filas.forEach(f=> f.excluida=false);
     } else {
-      let peor = null, peorVal = Infinity;
-      filas.forEach(f=>{
+      const conNota = f=>{
         const n = parseFloat(String(f.nota).replace(',', '.'));
-        const valida = !isNaN(n) && f.nota!=='' && f.nota!=='-';
-        if(valida && n < peorVal){ peorVal = n; peor = f; }
-      });
-      filas.forEach(f=> f.excluida = (peor!==null && f===peor));
+        return !isNaN(n) && f.nota!=='' && f.nota!=='-';
+      };
+      const pendientes = filas.filter(f=> !conNota(f));
+      let descartada = null;
+      if(pendientes.length){
+        descartada = pendientes[pendientes.length-1];
+      } else {
+        let peorVal = Infinity;
+        filas.forEach(f=>{
+          const n = parseFloat(String(f.nota).replace(',', '.'));
+          if(n < peorVal){ peorVal = n; descartada = f; }
+        });
+      }
+      filas.forEach(f=> f.excluida = (f===descartada));
     }
     if(grupo.repartirActivo){
       const activas = filas.filter(f=> !f.excluida);
@@ -824,7 +851,7 @@ function renderDetail(){
       <div class="section-btn" data-go="info">
         <div>
           <div class="label">Información Ramo</div>
-          <div class="status ${(r.profesor||r.seccion)?'ok':''}">${r.profesor? r.profesor : 'Profesor y sección'}</div>
+          <div class="status ${(r.profesor||r.seccion||r.correo)?'ok':''}">${r.profesor ? escapeHtml(r.profesor) + (r.correo ? ' · '+escapeHtml(r.correo) : '') : 'Profesor, sección y correo'}</div>
         </div>
         <div class="chev">${ICONS.chev}</div>
       </div>
@@ -918,7 +945,7 @@ function renderGrupoCard(set, grupo, target){
       <div class="switch-row" style="margin-bottom:0;">
         <div class="switch-label">
           <div class="switch-title">Descartar peor nota</div>
-          <div class="switch-sub">${descartarLocked ? 'Activa primero "Distribuir % en partes iguales"' : 'Se recalcula sola dentro de este grupo'}</div>
+          <div class="switch-sub">${descartarLocked ? 'Activa primero "Distribuir % en partes iguales"' : 'Mientras falten notas descarta la última pendiente'}</div>
         </div>
         <div class="switch-toggle ${descartarLocked?'locked':''}" data-grupotoggledescartar="${grupo.id}" data-target="${target}" data-on="${grupo.descartarPeor?'1':'0'}"></div>
       </div>
@@ -1081,9 +1108,21 @@ function renderInfo(){
         <label>Sección laboratorio</label>
         <input type="text" id="seccLabInput" value="${escapeHtml(r.seccionLab||'')}" placeholder="ej: L-1">
       ` : ''}
+      <label>Correo del profesor</label>
+      <input type="email" id="correoInput" value="${escapeHtml(r.correo||'')}" placeholder="ej: claudio.leal@usach.cl">
       <button class="btn-primary" id="guardarInfo">Guardar</button>
     </div>
   `;
+}
+
+/* claudio leal jara -> claudio.leal@usach.cl (se puede editar a mano) */
+function correoDesdeProfesor(nombre){
+  const partes = String(nombre||'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().replace(/[^a-z\s]/g,' ')
+    .trim().split(/\s+/).filter(Boolean);
+  if(!partes.length) return '';
+  return partes.slice(0,2).join('.') + '@usach.cl';
 }
 
 function escapeHtml(s){
@@ -1097,14 +1136,17 @@ function parsePrefix1(value){
   if(parseInt(numStr,10) !== 1) return null;
   return m[1];
 }
+/* Las filas rellenadas automáticamente se ven como texto normal (sin cursiva).
+   tipoAuto solo sirve para poder renumerarlas si cambias el primer nombre. */
 function autocompleteTipo(arr, startIndex, prefix){
   for(let i=startIndex+1;i<arr.length;i++){
     const row = arr[i];
     const isEmpty = !row.tipo;
-    const isSoft = row.tipoSuggested;
+    const isSoft = row.tipoSuggested || row.tipoAuto;
     if(isEmpty || isSoft){
       row.tipo = prefix + (i - startIndex + 1);
-      row.tipoSuggested = true;
+      row.tipoSuggested = false;
+      row.tipoAuto = true;
     }
   }
 }
@@ -1245,6 +1287,7 @@ function buildScheduleMap(){
           map[key] = {
             ramo:r.nombre, ubicacion:s.ubicacion||'-', tipo:s.tipo||'T',
             profesor:r.profesor||'-',
+            correo:r.correo||'',
             seccion:(s.tipo==='L' && r.seccionLab ? r.seccionLab : r.seccion) || '-',
             dia:s.dia, bloque:s.bloque
           };
@@ -1297,6 +1340,7 @@ function renderHorario(){
         <div class="hor-line" id="hoHorario"></div>
         <div class="hor-line"><b>Ubicación:</b> <span id="hoUbicacion"></span></div>
         <div class="hor-line"><b>Profesor:</b> <span id="hoProfesor"></span></div>
+        <div class="hor-line"><b>Correo:</b> <span id="hoCorreo"></span></div>
         <div class="hor-line"><b>Sección:</b> <span id="hoSeccion"></span></div>
         <div class="hor-line"><b>Tipo:</b> <span id="hoTipo"></span></div>
       </div>
@@ -1317,6 +1361,10 @@ function attachHorarioEvents(){
       document.getElementById('hoHorario').textContent = `Horario(${DIA_INICIAL[dia]}${bloque}): ${rango}`;
       document.getElementById('hoUbicacion').textContent = slot.ubicacion;
       document.getElementById('hoProfesor').textContent = slot.profesor;
+      const correoEl = document.getElementById('hoCorreo');
+      correoEl.innerHTML = slot.correo
+        ? `<a href="mailto:${escapeHtml(slot.correo)}">${escapeHtml(slot.correo)}</a>`
+        : '-';
       document.getElementById('hoSeccion').textContent = slot.seccion;
       document.getElementById('hoTipo').textContent = slot.tipo;
       document.getElementById('horarioOverlay').classList.add('show');
@@ -1368,12 +1416,20 @@ function calcNotaNecesaria(evaluaciones){
 }
 
 /* ============ VISTA: PROMEDIOS ============ */
-function simpleProm(arr){
-  const notas = (arr||[])
-    .filter(e=> !e.excluida)
-    .map(e=> parseFloat(String(e.nota).replace(',', '.')))
-    .filter(n=> !isNaN(n));
-  return notas.length ? (notas.reduce((a,b)=>a+b,0) / notas.length) : null;
+/* Promedio con las notas que lleva: cada nota se pondera por su %, pero
+   renormalizado sobre el peso ya rendido. Ej: control de 15% con 5,3 y
+   examen de 35% con 3,2 -> 5,3*(0,15/0,50) + 3,2*(0,35/0,50). Cuando estén
+   todas las notas coincide exactamente con el promedio final. */
+function promPonderado(arr){
+  let sumW=0, sumWN=0;
+  (arr||[]).forEach(e=>{
+    if(e.excluida) return;
+    const n = parseFloat(String(e.nota).replace(',', '.'));
+    if(isNaN(n) || e.nota==='' || e.nota==='-') return;
+    const w = (parseFloat(e.porcentaje)||0)/100;
+    sumW += w; sumWN += n*w;
+  });
+  return sumW>0 ? (sumWN/sumW) : null;
 }
 
 function renderPromedio(){
@@ -1381,14 +1437,14 @@ function renderPromedio(){
   const cards = state.ramos.map(r=>{
     let metaTxt;
     if(r.separarLab){
-      const teoProm = simpleProm(r.evaluaciones);
-      const labProm = simpleProm(r.evaluacionesLab);
+      const teoProm = promPonderado(r.evaluaciones);
+      const labProm = promPonderado(r.evaluacionesLab);
       const pT = parseFloat(r.ponderacionTeoria) || 0;
       const pL = parseFloat(r.ponderacionLab) || 0;
       const combinado = (teoProm!==null || labProm!==null) ? ((teoProm||0)*pT + (labProm||0)*pL) / 100 : null;
       metaTxt = `Teoría: ${teoProm!==null?formatNota(teoProm):'-'} | Laboratorio: ${labProm!==null?formatNota(labProm):'-'} | Promedio: ${combinado!==null?formatNota(combinado):'-'}`;
     } else {
-      const simple = simpleProm(r.evaluaciones);
+      const simple = promPonderado(r.evaluaciones);
       metaTxt = simple!==null ? 'Promedio: '+formatNota(simple) : 'Sin notas aún';
     }
     return `
@@ -1428,11 +1484,61 @@ function buildEvalLinesData(evals){
   return {linesHtml, promedio};
 }
 
-function necesariaTxt(evals){
+/* Línea de cierre de la tarjeta: mientras queden notas pendientes muestra la
+   nota necesaria; cuando ya están todas, el estado final (aprobado/reprobado). */
+function lineaCierre(evals){
   const necesaria = calcNotaNecesaria(evals);
-  if(necesaria===null) return 'Curso completo';
-  if(necesaria>7) return 'No alcanza (necesitas más de 7,0)';
-  return formatNota(necesaria);
+  if(necesaria!==null){
+    const txt = necesaria>7 ? 'No alcanza (necesitas más de 7,0)' : formatNota(necesaria);
+    return `<div class="hor-line linea-cierre">Nota necesaria: ${txt}</div>`;
+  }
+  const prom = promPonderado(evals);
+  if(prom===null) return `<div class="hor-line linea-cierre">Sin notas registradas</div>`;
+  const aprobado = prom >= APROBACION;
+  return `<div class="hor-line linea-cierre ${aprobado?'aprobado':'reprobado'}"${aprobado?' data-confeti="1"':''}>${aprobado?'Aprobado 🎉':'Reprobado'}</div>`;
+}
+
+/* Confeti hecho a mano en un canvas: no necesita librerías ni internet. */
+function lanzarConfeti(){
+  const cont = document.getElementById('phone');
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:60;';
+  cont.appendChild(canvas);
+  const W = cont.clientWidth, H = cont.clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const colores = ['#2F6E4E','#B0692A','#8A7418','#B5473A','#215239','#7BC49A'];
+  const piezas = [];
+  for(let i=0;i<130;i++){
+    piezas.push({
+      x: W/2 + (Math.random()-0.5)*W*0.5,
+      y: H*0.42 + (Math.random()-0.5)*40,
+      vx: (Math.random()-0.5)*8,
+      vy: -(Math.random()*9+5),
+      w: 5+Math.random()*6, h: 8+Math.random()*7,
+      rot: Math.random()*Math.PI, vr: (Math.random()-0.5)*0.35,
+      color: colores[Math.floor(Math.random()*colores.length)]
+    });
+  }
+  const inicio = performance.now();
+  (function frame(t){
+    const vida = t - inicio;
+    ctx.clearRect(0,0,W,H);
+    piezas.forEach(p=>{
+      p.vy += 0.3; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.globalAlpha = Math.max(0, 1 - vida/2600);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      ctx.restore();
+    });
+    if(vida < 2600) requestAnimationFrame(frame);
+    else canvas.remove();
+  })(inicio);
 }
 
 function buildPromedioSimpleHTML(r){
@@ -1441,7 +1547,7 @@ function buildPromedioSimpleHTML(r){
   return `
     <h2>${escapeHtml(r.nombre)}: ${promedio!==null?formatNota(promedio):'-'}</h2>
     <div>${linesHtml || '<div class="hint">Sin evaluaciones configuradas.</div>'}</div>
-    <div class="hor-line" style="margin-top:12px;font-weight:700;color:var(--accent-dark);">Nota necesaria: ${necesariaTxt(evals)}</div>
+    ${lineaCierre(evals)}
   `;
 }
 
@@ -1453,6 +1559,8 @@ function buildPromedioCarouselHTML(r){
   const pT = parseFloat(r.ponderacionTeoria) || 0;
   const pL = parseFloat(r.ponderacionLab) || 0;
   const combinado = (promT!==null || promL!==null) ? ((promT||0)*pT + (promL||0)*pL) / 100 : null;
+  const completo = calcNotaNecesaria(evalsT)===null && calcNotaNecesaria(evalsL)===null && combinado!==null;
+  const aprobadoFinal = completo && combinado >= APROBACION;
 
   return `
     <div class="prom-carousel-wrap">
@@ -1460,18 +1568,19 @@ function buildPromedioCarouselHTML(r){
         <div class="prom-slide">
           <h2>Teoría: ${promT!==null?formatNota(promT):'-'}</h2>
           <div>${linesT || '<div class="hint">Sin evaluaciones configuradas.</div>'}</div>
-          <div class="hor-line" style="margin-top:12px;font-weight:700;color:var(--accent-dark);">Nota necesaria: ${necesariaTxt(evalsT)}</div>
+          ${lineaCierre(evalsT)}
         </div>
         <div class="prom-slide">
           <h2>Laboratorio: ${promL!==null?formatNota(promL):'-'}</h2>
           <div>${linesL || '<div class="hint">Sin evaluaciones configuradas.</div>'}</div>
-          <div class="hor-line" style="margin-top:12px;font-weight:700;color:var(--accent-dark);">Nota necesaria: ${necesariaTxt(evalsL)}</div>
+          ${lineaCierre(evalsL)}
         </div>
         <div class="prom-slide">
           <h2>${escapeHtml(r.nombre)}</h2>
           <div class="hor-line">Teoría (${pT}%): ${promT!==null?formatNota(promT):'-'}</div>
           <div class="hor-line">Laboratorio (${pL}%): ${promL!==null?formatNota(promL):'-'}</div>
           <div class="hor-line" style="margin-top:12px;font-weight:700;color:var(--accent-dark);">Promedio final: ${combinado!==null?formatNota(combinado):'-'}</div>
+          ${completo ? `<div class="hor-line linea-cierre ${aprobadoFinal?'aprobado':'reprobado'}"${aprobadoFinal?' data-confeti="1"':''}>${aprobadoFinal?'Aprobado 🎉':'Reprobado'}</div>` : ''}
         </div>
       </div>
       <div class="prom-dots">
@@ -1499,6 +1608,8 @@ function attachPromedioEvents(){
         dyn.innerHTML = buildPromedioSimpleHTML(r);
       }
 
+      // El estado "Aprobado" lanza confeti al tocarlo
+      dyn.querySelectorAll('[data-confeti]').forEach(el=> el.onclick = lanzarConfeti);
       document.getElementById('promOverlay').classList.add('show');
     };
   });
@@ -1610,11 +1721,10 @@ function renderMiniCalendario(){
     const esHoy = day===hoy.getDate();
     let cls = 'cal-day static';
     if(dayEvals && dayEvals.length){
-      cls += esPasada(dayEvals[0].fecha) ? ' cal-day-green' : ' cal-day-orange';
-    } else if(esHoy){
-      cls += ' cal-day-today';
+      cls += diaCumplido(dayEvals) ? ' cal-day-green' : ' cal-day-orange';
     }
-    cells += `<div class="${cls}">${day}</div>`;
+    if(esHoy) cls += ' cal-day-today';
+    cells += `<div class="${cls}">${esHoy?'<span class="cal-hoy-mark"></span>':''}<span class="cal-num">${day}</span></div>`;
   }
 
   return `
@@ -1888,7 +1998,7 @@ function construirRamosDesdePdf(datos){
     return {
       id:uid(), nombre:r.nombre, evaluaciones:[], gruposEval:[],
       nSemana:r.sesiones.length, sesiones:r.sesiones,
-      profesor:'', seccion:r.seccion, seccionLab:r.seccionLab,
+      profesor:'', correo:'', seccion:r.seccion, seccionLab:r.seccionLab,
       separarLab:false, evaluacionesLab:[], gruposEvalLab:[],
       ponderacionTeoria:50, ponderacionLab:50
     };
@@ -2191,6 +2301,32 @@ function esPasada(iso){
   const fecha = new Date(iso+'T00:00:00');
   return fecha <= hoy;
 }
+
+/* Una evaluación se da por rendida 1h20 después de su hora de inicio.
+   Si no se anotó hora, recién a las 23:59 de ese día. */
+const DUR_PRUEBA_MIN = 80;
+function finEvaluacion(e){
+  if(!e || !e.fecha) return null;
+  const d = new Date(e.fecha+'T00:00:00');
+  if(e.hora){
+    const [h,m] = e.hora.split(':').map(Number);
+    d.setHours(h||0, (m||0)+DUR_PRUEBA_MIN, 0, 0);
+  } else {
+    d.setHours(23,59,59,999);
+  }
+  return d;
+}
+function evaluacionCumplida(e){
+  const fin = finEvaluacion(e);
+  return fin ? new Date() >= fin : false;
+}
+/* El día pasa a verde solo cuando terminó la ÚLTIMA prueba de ese día. */
+function diaCumplido(evals){
+  const fines = (evals||[]).map(finEvaluacion).filter(Boolean);
+  if(!fines.length) return false;
+  return new Date() >= new Date(Math.max(...fines.map(f=>f.getTime())));
+}
+
 function tablaEvaluaciones(evals){
   if(!evals.length){
     return `<div class="hint" style="margin:12px 18px 0;">No hay evaluaciones para mostrar.</div>`;
@@ -2200,7 +2336,7 @@ function tablaEvaluaciones(evals){
       <td class="num-cell">${i+1}</td>
       <td>${escapeHtml(e.ramo)}</td>
       <td>${escapeHtml(e.tipo)}</td>
-      <td><span class="cal-fecha-cell ${esPasada(e.fecha)?'pasada':'pendiente'}" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</span></td>
+      <td><span class="cal-fecha-cell ${evaluacionCumplida(e)?'pasada':'pendiente'}" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</span></td>
       <td>${escapeHtml(e.hora||'-')}</td>
       <td>${escapeHtml(e.nota||'-')}</td>
       <td>${e.porcentaje ? formatPorcentaje(e.porcentaje)+'%' : '-'}</td>
@@ -2226,7 +2362,7 @@ function tablaEvaluacionesVertical(evals){
   const filaN       = fila('N', evals.map((e,i)=>`<td>${i+1}</td>`).join(''));
   const filaRamo     = fila('Ramo', evals.map(e=>`<td>${escapeHtml(e.ramo)}</td>`).join(''));
   const filaPrueba   = fila('Prueba', evals.map(e=>`<td>${escapeHtml(e.tipo)}</td>`).join(''));
-  const filaFecha    = fila('Fecha', evals.map(e=>`<td><span class="cal-fecha-cell ${esPasada(e.fecha)?'pasada':'pendiente'}" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</span></td>`).join(''));
+  const filaFecha    = fila('Fecha', evals.map(e=>`<td><span class="cal-fecha-cell ${evaluacionCumplida(e)?'pasada':'pendiente'}" data-hora="${escapeHtml(e.hora||'')}">${formatFechaCorta(e.fecha)}</span></td>`).join(''));
   const filaHora     = fila('Hora', evals.map(e=>`<td>${escapeHtml(e.hora||'-')}</td>`).join(''));
   const filaNota     = fila('Nota', evals.map(e=>`<td>${escapeHtml(e.nota||'-')}</td>`).join(''));
   const filaPorc     = fila('%', evals.map(e=>`<td>${e.porcentaje ? formatPorcentaje(e.porcentaje)+'%' : '-'}</td>`).join(''));
@@ -2291,11 +2427,10 @@ function renderCalendarioMes(){
     const isHoy = year===hoyReal.getFullYear() && month===hoyReal.getMonth() && day===hoyReal.getDate();
     let cls = 'cal-day';
     if(dayEvals && dayEvals.length){
-      cls += esPasada(dayEvals[0].fecha) ? ' cal-day-green' : ' cal-day-orange';
-    } else if(isHoy){
-      cls += ' cal-day-today';
+      cls += diaCumplido(dayEvals) ? ' cal-day-green' : ' cal-day-orange';
     }
-    cells += `<div class="${cls}" data-day="${day}">${day}</div>`;
+    if(isHoy) cls += ' cal-day-today';
+    cells += `<div class="${cls}" data-day="${day}">${isHoy?'<span class="cal-hoy-mark"></span>':''}<span class="cal-num">${day}</span></div>`;
   }
 
   return `
@@ -2390,6 +2525,7 @@ function wireSeccionEventos(r, target){
       if(field==='tipo'){
         row.tipo = input.value;
         row.tipoSuggested = false;
+        row.tipoAuto = false;
         const prefix = parsePrefix1(input.value);
         if(prefix!==null){
           const grp = getGroupOfRow(set.grupos, row.id);
@@ -2522,7 +2658,7 @@ function attachEvents(){
     document.getElementById('addRamoBtn').onclick = ()=>{
       const nombre = prompt('Nombre del ramo:');
       if(nombre && nombre.trim()){
-        state.ramos.push({id:uid(), nombre:nombre.trim(), evaluaciones:[], gruposEval:[], nSemana:0, sesiones:[], profesor:'', seccion:'', separarLab:false, evaluacionesLab:[], gruposEvalLab:[], ponderacionTeoria:50, ponderacionLab:50});
+        state.ramos.push({id:uid(), nombre:nombre.trim(), evaluaciones:[], gruposEval:[], nSemana:0, sesiones:[], profesor:'', correo:'', seccion:'', separarLab:false, evaluacionesLab:[], gruposEvalLab:[], ponderacionTeoria:50, ponderacionLab:50});
         persist(); render();
       }
     };
@@ -2673,12 +2809,26 @@ function attachEvents(){
 
   if(state.view==='info'){
     document.querySelector('[data-back]').onclick = ()=>{ state.view='detail'; render(); };
+    const rInfo = getRamo();
+    const profInput = document.getElementById('profInput');
+    const correoInput = document.getElementById('correoInput');
+    // Se sugiere el correo a partir del nombre, mientras no lo hayas editado tú
+    if(!correoInput.value && profInput.value){
+      correoInput.value = correoDesdeProfesor(profInput.value);
+    }
+    profInput.addEventListener('input', ()=>{
+      if(!rInfo.correoManual) correoInput.value = correoDesdeProfesor(profInput.value);
+    });
+    correoInput.addEventListener('input', ()=>{
+      rInfo.correoManual = correoInput.value.trim() !== correoDesdeProfesor(profInput.value);
+    });
     document.getElementById('guardarInfo').onclick = ()=>{
       const r = getRamo();
-      r.profesor = document.getElementById('profInput').value.trim();
+      r.profesor = profInput.value.trim();
       r.seccion = document.getElementById('seccInput').value.trim();
       const seccLab = document.getElementById('seccLabInput');
       if(seccLab) r.seccionLab = seccLab.value.trim();
+      r.correo = correoInput.value.trim();
       persist(); toast('Información guardada'); state.view='detail'; render();
     };
   }
