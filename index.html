@@ -1495,11 +1495,17 @@ function lineaCierre(evals){
   const prom = promPonderado(evals);
   if(prom===null) return `<div class="hor-line linea-cierre">Sin notas registradas</div>`;
   const aprobado = prom >= APROBACION;
-  return `<div class="hor-line linea-cierre ${aprobado?'aprobado':'reprobado'}"${aprobado?' data-confeti="1"':''}>${aprobado?'Aprobado 🎉':'Reprobado'}</div>`;
+  return `<div class="hor-line linea-cierre ${aprobado?'aprobado':'reprobado'}"${aprobado?' data-confeti="1"':''}>${aprobado?'Aprobado':'Reprobado'}</div>`;
 }
 
-/* Confeti hecho a mano en un canvas: no necesita librerías ni internet. */
-function lanzarConfeti(){
+/* ============ CELEBRACIONES ============
+   Todas dibujadas a mano en un canvas: no necesitan librerías ni internet.
+   Al tocar "Aprobado" se elige una al azar. */
+
+const COLORES_FIESTA = ['#2F6E4E','#B0692A','#8A7418','#B5473A','#215239','#7BC49A','#E4B34A'];
+
+/* Crea el lienzo sobre el marco del teléfono y corre la animación */
+function animarCelebracion(duracion, init, paso){
   const cont = document.getElementById('phone');
   const canvas = document.createElement('canvas');
   canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:60;';
@@ -1509,23 +1515,39 @@ function lanzarConfeti(){
   canvas.width = W*dpr; canvas.height = H*dpr;
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
-  const colores = ['#2F6E4E','#B0692A','#8A7418','#B5473A','#215239','#7BC49A'];
-  const piezas = [];
-  for(let i=0;i<130;i++){
-    piezas.push({
-      x: W/2 + (Math.random()-0.5)*W*0.5,
-      y: H*0.42 + (Math.random()-0.5)*40,
-      vx: (Math.random()-0.5)*8,
-      vy: -(Math.random()*9+5),
-      w: 5+Math.random()*6, h: 8+Math.random()*7,
-      rot: Math.random()*Math.PI, vr: (Math.random()-0.5)*0.35,
-      color: colores[Math.floor(Math.random()*colores.length)]
-    });
-  }
+
+  const datos = init(W, H);
   const inicio = performance.now();
   (function frame(t){
     const vida = t - inicio;
     ctx.clearRect(0,0,W,H);
+    paso(ctx, datos, vida, W, H);
+    if(vida < duracion) requestAnimationFrame(frame);
+    else canvas.remove();
+  })(inicio);
+}
+
+function colorFiesta(){
+  return COLORES_FIESTA[Math.floor(Math.random()*COLORES_FIESTA.length)];
+}
+
+/* --- Confeti: papelitos que saltan desde el centro y caen --- */
+function celebracionConfeti(){
+  animarCelebracion(2600, (W,H)=>{
+    const piezas = [];
+    for(let i=0;i<130;i++){
+      piezas.push({
+        x: W/2 + (Math.random()-0.5)*W*0.5,
+        y: H*0.42 + (Math.random()-0.5)*40,
+        vx: (Math.random()-0.5)*8,
+        vy: -(Math.random()*9+5),
+        w: 5+Math.random()*6, h: 8+Math.random()*7,
+        rot: Math.random()*Math.PI, vr: (Math.random()-0.5)*0.35,
+        color: colorFiesta()
+      });
+    }
+    return piezas;
+  }, (ctx, piezas, vida)=>{
     piezas.forEach(p=>{
       p.vy += 0.3; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
       ctx.save();
@@ -1536,9 +1558,150 @@ function lanzarConfeti(){
       ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
       ctx.restore();
     });
-    if(vida < 2600) requestAnimationFrame(frame);
-    else canvas.remove();
-  })(inicio);
+  });
+}
+
+/* --- Fuegos artificiales: cohetes que suben y estallan en círculo --- */
+function celebracionFuegos(){
+  const DUR = 3000;
+  animarCelebracion(DUR, (W,H)=>{
+    const cohetes = [];
+    for(let i=0;i<5;i++){
+      cohetes.push({
+        x: W*(0.2+Math.random()*0.6),
+        y: H,
+        objetivo: H*(0.2+Math.random()*0.3),
+        retraso: i*380 + Math.random()*180,
+        vy: -(4.5+Math.random()*2),
+        color: colorFiesta(),
+        estallo: false,
+        chispas: []
+      });
+    }
+    return cohetes;
+  }, (ctx, cohetes, vida)=>{
+    cohetes.forEach(c=>{
+      if(vida < c.retraso) return;
+      if(!c.estallo){
+        c.y += c.vy;
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = c.color;
+        ctx.fillRect(c.x-1.5, c.y, 3, 9);
+        if(c.y <= c.objetivo){
+          c.estallo = true;
+          c.tEstallido = vida;
+          const n = 34;
+          for(let i=0;i<n;i++){
+            const ang = (Math.PI*2/n)*i + Math.random()*0.1;
+            const vel = 2.2 + Math.random()*2.6;
+            c.chispas.push({x:c.x, y:c.y, vx:Math.cos(ang)*vel, vy:Math.sin(ang)*vel});
+          }
+        }
+      } else {
+        const t = vida - c.tEstallido;
+        const alpha = Math.max(0, 1 - t/1200);
+        ctx.fillStyle = c.color;
+        c.chispas.forEach(s=>{
+          s.vy += 0.05; s.vx *= 0.985; s.vy *= 0.985;
+          s.x += s.vx; s.y += s.vy;
+          ctx.globalAlpha = alpha;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, 2.4, 0, Math.PI*2);
+          ctx.fill();
+        });
+      }
+    });
+    ctx.globalAlpha = 1;
+  });
+}
+
+/* --- Globos: suben meciéndose con su cordel --- */
+function celebracionGlobos(){
+  const DUR = 3200;
+  animarCelebracion(DUR, (W,H)=>{
+    const globos = [];
+    for(let i=0;i<14;i++){
+      globos.push({
+        x: W*(0.08+Math.random()*0.84),
+        y: H + 40 + Math.random()*H*0.6,
+        r: 13+Math.random()*10,
+        vy: -(1.1+Math.random()*1.1),
+        fase: Math.random()*Math.PI*2,
+        amp: 8+Math.random()*14,
+        color: colorFiesta()
+      });
+    }
+    return globos;
+  }, (ctx, globos, vida)=>{
+    const alpha = Math.max(0, 1 - Math.max(0, vida-2200)/1000);
+    globos.forEach(g=>{
+      g.y += g.vy;
+      const x = g.x + Math.sin(vida/620 + g.fase)*g.amp;
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = 'rgba(94,110,99,0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, g.y + g.r);
+      ctx.quadraticCurveTo(x + g.amp*0.3, g.y + g.r*2.2, x, g.y + g.r*3.2);
+      ctx.stroke();
+      ctx.fillStyle = g.color;
+      ctx.beginPath();
+      ctx.ellipse(x, g.y, g.r*0.85, g.r, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.beginPath();
+      ctx.ellipse(x - g.r*0.3, g.y - g.r*0.35, g.r*0.22, g.r*0.3, -0.4, 0, Math.PI*2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+  });
+}
+
+/* --- Estrellas: destellos que aparecen y se apagan por toda la pantalla --- */
+function celebracionEstrellas(){
+  const DUR = 2600;
+  const punta = (ctx, x, y, r)=>{
+    ctx.beginPath();
+    for(let i=0;i<8;i++){
+      const ang = (Math.PI/4)*i;
+      const rad = i%2===0 ? r : r*0.38;
+      const px = x + Math.cos(ang)*rad, py = y + Math.sin(ang)*rad;
+      i===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  };
+  animarCelebracion(DUR, (W,H)=>{
+    const estrellas = [];
+    for(let i=0;i<45;i++){
+      estrellas.push({
+        x: W*(0.05+Math.random()*0.9),
+        y: H*(0.1+Math.random()*0.8),
+        r: 6+Math.random()*12,
+        nace: Math.random()*1500,
+        dura: 500+Math.random()*700,
+        color: colorFiesta()
+      });
+    }
+    return estrellas;
+  }, (ctx, estrellas, vida)=>{
+    estrellas.forEach(e=>{
+      const t = vida - e.nace;
+      if(t < 0 || t > e.dura) return;
+      const p = t/e.dura;
+      ctx.globalAlpha = Math.sin(p*Math.PI);
+      ctx.fillStyle = e.color;
+      punta(ctx, e.x, e.y, e.r*(0.6+0.4*Math.sin(p*Math.PI)));
+    });
+    ctx.globalAlpha = 1;
+  });
+}
+
+const CELEBRACIONES = [celebracionConfeti, celebracionFuegos, celebracionGlobos, celebracionEstrellas];
+
+/* Se elige una al azar en cada toque */
+function celebrar(){
+  CELEBRACIONES[Math.floor(Math.random()*CELEBRACIONES.length)]();
 }
 
 function buildPromedioSimpleHTML(r){
@@ -1580,7 +1743,7 @@ function buildPromedioCarouselHTML(r){
           <div class="hor-line">Teoría (${pT}%): ${promT!==null?formatNota(promT):'-'}</div>
           <div class="hor-line">Laboratorio (${pL}%): ${promL!==null?formatNota(promL):'-'}</div>
           <div class="hor-line" style="margin-top:12px;font-weight:700;color:var(--accent-dark);">Promedio final: ${combinado!==null?formatNota(combinado):'-'}</div>
-          ${completo ? `<div class="hor-line linea-cierre ${aprobadoFinal?'aprobado':'reprobado'}"${aprobadoFinal?' data-confeti="1"':''}>${aprobadoFinal?'Aprobado 🎉':'Reprobado'}</div>` : ''}
+          ${completo ? `<div class="hor-line linea-cierre ${aprobadoFinal?'aprobado':'reprobado'}"${aprobadoFinal?' data-confeti="1"':''}>${aprobadoFinal?'Aprobado':'Reprobado'}</div>` : ''}
         </div>
       </div>
       <div class="prom-dots">
@@ -1608,8 +1771,8 @@ function attachPromedioEvents(){
         dyn.innerHTML = buildPromedioSimpleHTML(r);
       }
 
-      // El estado "Aprobado" lanza confeti al tocarlo
-      dyn.querySelectorAll('[data-confeti]').forEach(el=> el.onclick = lanzarConfeti);
+      // El estado "Aprobado" lanza una celebración al azar al tocarlo
+      dyn.querySelectorAll('[data-confeti]').forEach(el=> el.onclick = celebrar);
       document.getElementById('promOverlay').classList.add('show');
     };
   });
