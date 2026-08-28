@@ -838,8 +838,38 @@ function renderList(){
   `;
 }
 
+/* Nombres de evaluaciones para el sub texto: primero las sueltas (en el orden
+   en que fueron creadas) y después los grupos. Ej: Informe | Video | Exámenes */
+function resumenEvaluaciones(r){
+  const nombres = [];
+  ['teoria','lab'].forEach(target=>{
+    if(target==='lab' && !r.separarLab) return;
+    const set = getEvalSet(r, target);
+    set.arr.forEach(row=>{
+      if(getGroupOfRow(set.grupos, row.id)) return;
+      const t = String(row.tipo||'').trim();
+      if(t) nombres.push(t);
+    });
+    (set.grupos||[]).forEach(g=>{
+      const n = String(g.nombre||'').trim();
+      if(n) nombres.push(n);
+    });
+  });
+  return nombres.join(' | ');
+}
+
+/* Bloques de clase para el sub texto del horario. Ej: L1 | M1 | W4 | W5 */
+function resumenHorario(r){
+  return (r.sesiones||[])
+    .filter(s=> s.dia && s.bloque)
+    .map(s=> `${DIA_INICIAL[s.dia]||''}${s.bloque}`)
+    .join(' | ');
+}
+
 function renderDetail(){
   const r = getRamo();
+  const resEval = resumenEvaluaciones(r);
+  const resHor = resumenHorario(r);
   return `
     <div class="topbar">
       <div class="back" data-back="list">${ICONS.back}</div>
@@ -851,14 +881,14 @@ function renderDetail(){
       <div class="section-btn" data-go="evaluaciones">
         <div>
           <div class="label">Evaluaciones</div>
-          <div class="status ${r.evaluaciones && r.evaluaciones.length?'ok':''}">${r.evaluaciones && r.evaluaciones.length? r.evaluaciones.length+' evaluaciones configuradas' : 'Sin configurar — toca para agregarlas'}</div>
+          <div class="status ${resEval?'ok':''}">${resEval ? escapeHtml(resEval) : 'Sin configurar — toca para agregarlas'}</div>
         </div>
         <div class="chev">${ICONS.chev}</div>
       </div>
       <div class="section-btn" data-go="semana">
         <div>
           <div class="label">Horario</div>
-          <div class="status ${r.nSemana?'ok':''}">${r.nSemana? r.nSemana+' bloques a la semana' : 'Sin configurar — toca para agregarlo'}</div>
+          <div class="status ${resHor?'ok':''}">${resHor ? escapeHtml(resHor) : 'Sin configurar — toca para agregarlo'}</div>
         </div>
         <div class="chev">${ICONS.chev}</div>
       </div>
@@ -1127,6 +1157,11 @@ function renderInfo(){
       <button class="btn-primary" id="guardarInfo">Guardar</button>
     </div>
   `;
+}
+
+/* oscar reyes -> Oscar Reyes: cada palabra parte con mayúscula */
+function capitalizarNombre(txt){
+  return String(txt||'').replace(/(^|[\s'-])(\S)/g, (m,sep,letra)=> sep + letra.toUpperCase());
 }
 
 /* claudio leal jara -> claudio.leal@usach.cl (se puede editar a mano) */
@@ -3046,6 +3081,12 @@ function attachEvents(){
       correoInput.value = correoDesdeProfesor(profInput.value);
     }
     profInput.addEventListener('input', ()=>{
+      const pos = profInput.selectionStart;
+      const capitalizado = capitalizarNombre(profInput.value);
+      if(capitalizado !== profInput.value){
+        profInput.value = capitalizado;
+        profInput.setSelectionRange(pos, pos);
+      }
       if(!rInfo.correoManual) correoInput.value = correoDesdeProfesor(profInput.value);
     });
     correoInput.addEventListener('input', ()=>{
@@ -3053,7 +3094,7 @@ function attachEvents(){
     });
     document.getElementById('guardarInfo').onclick = ()=>{
       const r = getRamo();
-      r.profesor = profInput.value.trim();
+      r.profesor = capitalizarNombre(profInput.value.trim());
       r.seccion = document.getElementById('seccInput').value.trim();
       const seccLab = document.getElementById('seccLabInput');
       if(seccLab) r.seccionLab = seccLab.value.trim();
